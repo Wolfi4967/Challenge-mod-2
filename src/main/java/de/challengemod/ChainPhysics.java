@@ -3,6 +3,7 @@ package de.challengemod;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
@@ -74,7 +75,8 @@ final class ChainPhysics {
             velocity = velocity.normalize().scale(MAX_SPEED);
         }
         player.setDeltaMovement(velocity);
-        player.hurtMarked = true; // schickt die neue Geschwindigkeit an den Client
+        // schickt die neue Geschwindigkeit direkt an den Client
+        player.connection.send(new ClientboundSetEntityMotionPacket(player.getId(), velocity));
         if (dir.y > 0.3) {
             player.resetFallDistance(); // wer hochgezogen wird, sammelt keinen Fallschaden
         }
