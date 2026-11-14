@@ -66,7 +66,7 @@ final class BlockRandomizer {
     private static Map<ResourceKey<LootTable>, Block> tableToBlock;
     private static Map<Block, Item> mapping;
     private static long mappingId = Long.MIN_VALUE;
-    private static final Set<Block> droppedThisBreak = new HashSet<>();
+    private static final Set<ResourceKey<LootTable>> droppedThisBreak = new HashSet<>();
     private static boolean errorLogged;
 
     private BlockRandomizer() {
@@ -92,8 +92,9 @@ final class BlockRandomizer {
                 return;
             }
             Block block = state.getBlock();
-            if (droppedThisBreak.contains(block) || block.getLootTable().isEmpty()) {
-                return; // hat schon gedroppt bzw. Block ohne Beute (z. B. Spawner)
+            var table = block.getLootTable();
+            if (table.isEmpty() || droppedThisBreak.contains(table.get())) {
+                return; // Block ohne Beute (z. B. Spawner) bzw. hat schon gedroppt
             }
             String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
             if (id.endsWith("shulker_box") || SKIP.contains(id)) {
@@ -142,11 +143,10 @@ final class BlockRandomizer {
             if (target == null) {
                 return;
             }
-            int max = new ItemStack(target).getMaxStackSize();
-            int count = Math.max(1, Math.min(drops.get(0).getCount(), max));
+            // immer genau EIN Item pro Block
             drops.clear();
-            drops.add(new ItemStack(target, count));
-            droppedThisBreak.add(block);
+            drops.add(new ItemStack(target));
+            droppedThisBreak.add(key.get());
         } catch (Throwable t) {
             if (!errorLogged) {
                 errorLogged = true;
