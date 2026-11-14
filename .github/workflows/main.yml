@@ -1,0 +1,32 @@
+name: Mod bauen
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dateien holen
+        uses: actions/checkout@v4
+
+      - name: Java 25 installieren
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Gradle installieren
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Mod bauen
+        run: gradle build --no-daemon --stacktrace
+
+      - name: Fertige .jar zum Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenge-mod
+          path: build/libs/*.jar
