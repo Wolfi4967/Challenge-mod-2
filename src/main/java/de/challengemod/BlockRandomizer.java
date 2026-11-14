@@ -3,18 +3,23 @@ package de.challengemod;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootTable;
 
@@ -61,9 +66,49 @@ final class BlockRandomizer {
     private static Map<ResourceKey<LootTable>, Block> tableToBlock;
     private static Map<Block, Item> mapping;
     private static long mappingId = Long.MIN_VALUE;
+    private static final Set<Block> droppedThisBreak = new HashSet<>();
     private static boolean errorLogged;
 
     private BlockRandomizer() {
+    }
+
+    /** Vor jedem Abbau: merken, welche Blöcke bei diesem Abbau schon etwas gedroppt haben. */
+    static boolean beforeBreak() {
+        droppedThisBreak.clear();
+        return true;
+    }
+
+    /**
+     * Nach dem Abbau: Hat der Block nichts gedroppt (falsches Werkzeug, bloße Hand, Glas, Laub …),
+     * droppt er trotzdem sein Randomizer-Item. So ist jeder Block mit allem abbaubar.
+     */
+    static void afterBreak(Level level, Player player, BlockPos pos, BlockState state) {
+        try {
+            MinecraftServer server = level.getServer();
+            if (server == null || player.isCreative()) {
+                return;
+            }
+            if (!Scores.running(server) || Scores.get(server, "#m_brand", "sb.cfg", 0) != 1) {
+                return;
+            }
+            Block block = state.getBlock();
+            if (droppedThisBreak.contains(block) || block.getLootTable().isEmpty()) {
+                return; // hat schon gedroppt bzw. Block ohne Beute (z. B. Spawner)
+            }
+            String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
+            if (id.endsWith("shulker_box") || SKIP.contains(id)) {
+                return;
+            }
+            Item target = mapping(server).get(block);
+            if (target != null) {
+                Block.popResource(level, pos, new ItemStack(target));
+            }
+        } catch (Throwable t) {
+            if (!errorLogged) {
+                errorLogged = true;
+                ChallengeMod.LOGGER.error("Block-Randomizer ist ausgefallen (wird nur einmal gemeldet)", t);
+            }
+        }
     }
 
     static void reset() {
@@ -101,6 +146,7 @@ final class BlockRandomizer {
             int count = Math.max(1, Math.min(drops.get(0).getCount(), max));
             drops.clear();
             drops.add(new ItemStack(target, count));
+            droppedThisBreak.add(block);
         } catch (Throwable t) {
             if (!errorLogged) {
                 errorLogged = true;

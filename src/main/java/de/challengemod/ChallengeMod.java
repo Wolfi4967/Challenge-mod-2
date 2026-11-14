@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.loot.v3.LootTableEvents;
 import net.minecraft.commands.CommandSourceStack;
@@ -31,6 +32,9 @@ public class ChallengeMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(ChainPhysics::tick);
         LootTableEvents.MODIFY_DROPS.register(BlockRandomizer::modifyDrops);
+        // Block-Randomizer: Blöcke droppen auch ohne das passende Werkzeug
+        PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> BlockRandomizer.beforeBreak());
+        PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> BlockRandomizer.afterBreak(level, player, pos, state));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlockRandomizer.reset());
         LOGGER.info("Challenge-Mod geladen – im Spiel: /challenge oder Taste G");
     }
