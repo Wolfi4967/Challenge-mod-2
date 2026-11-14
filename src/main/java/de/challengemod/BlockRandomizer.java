@@ -67,6 +67,8 @@ final class BlockRandomizer {
     private static Map<Block, Item> mapping;
     private static long mappingId = Long.MIN_VALUE;
     private static final Set<ResourceKey<LootTable>> droppedThisBreak = new HashSet<>();
+    private static ResourceKey<LootTable> pendingKey;
+    private static int pendingTick = -1;
     private static boolean errorLogged;
 
     private BlockRandomizer() {
@@ -75,6 +77,7 @@ final class BlockRandomizer {
     /** Vor jedem Abbau: merken, welche Blöcke bei diesem Abbau schon etwas gedroppt haben. */
     static boolean beforeBreak() {
         droppedThisBreak.clear();
+        pendingKey = null;
         return true;
     }
 
@@ -103,6 +106,9 @@ final class BlockRandomizer {
             Item target = mapping(server).get(block);
             if (target != null) {
                 Block.popResource(level, pos, new ItemStack(target));
+                // Minecraft erzeugt den normalen Drop erst NACH diesem Moment -> vormerken, damit er gestrichen wird
+                pendingKey = table.get();
+                pendingTick = server.getTickCount();
             }
         } catch (Throwable t) {
             if (!errorLogged) {
@@ -115,6 +121,8 @@ final class BlockRandomizer {
     static void reset() {
         mapping = null;
         tableToBlock = null;
+        pendingKey = null;
+        droppedThisBreak.clear();
         mappingId = Long.MIN_VALUE;
     }
 
@@ -134,6 +142,12 @@ final class BlockRandomizer {
             Block block = tables().get(key.get());
             if (block == null) {
                 return; // kein Block-Loot (Truhe, Mob, Angeln …)
+            }
+            if (key.get().equals(pendingKey) && pendingTick == server.getTickCount()) {
+                // Dieser Block hat sein Item beim Abbauen schon bekommen -> den normalen Drop streichen
+                pendingKey = null;
+                drops.clear();
+                return;
             }
             String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
             if (id.endsWith("shulker_box") || SKIP.contains(id)) {
