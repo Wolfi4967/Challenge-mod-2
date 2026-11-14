@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "challenge-mod",
+  "version": "${version}",
+  "name": "Challenge-Mod",
+  "description": "Challenges im BastiGHG-Stil: geteilter Schmerz, Seelenband, Kette wie Chained Together, Mutationen, Mob- und Block-Randomizer, Ultra Hardcore, wählbare Ziele – alles per Menü (Taste G oder /challenge). Nur der Host bzw. Server braucht den Mod.",
+  "authors": ["Challenge-Mod"],
+  "license": "MIT",
+  "icon": "assets/challenge-mod/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["de.challengemod.ChallengeMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

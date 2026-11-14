@@ -1,0 +1,42 @@
+plugins {
+	// Minecraft 26.x ist nicht mehr verschleiert -> neues Loom-Plugin ohne Mappings/Remapping
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	// Loom fügt die Repositories von Mojang und Fabric automatisch hinzu.
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+	inputs.property "version", project.version
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	// Das komplette Challenge-Datenpaket (Menüs, Regeln, Mutationen …) steckt in EINER Datei,
+	// damit man nur wenige Dateien auf GitHub hochladen muss. Hier wird es in den Mod eingepackt.
+	from(zipTree("challenge-data.zip"))
+	filesMatching("fabric.mod.json") {
+		expand "version": inputs.properties.version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	it.options.encoding = "UTF-8"
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
