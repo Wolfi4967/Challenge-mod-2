@@ -351,7 +351,7 @@ final class RiftBoss {
             crackCountdown = 12;
             return;
         }
-        paintCracks(server, Blocks.PURPLE_CONCRETE.defaultBlockState());
+        paintCracks(server, RiftIsland.crackState());
         crackStage = 0;
         crackTimer = enraged ? 150 : 230;
     }
@@ -371,7 +371,7 @@ final class RiftBoss {
         RiftIsland.ensure(cx, top, cz);
         for (int g = 0; g < 4; g++) {
             crackGroup = g;
-            paintCracks(server, Blocks.PURPLE_CONCRETE.defaultBlockState());
+            paintCracks(server, RiftIsland.crackState());
         }
         crackGroup = -1;
         crackStage = 0;
@@ -380,7 +380,7 @@ final class RiftBoss {
     private static void win(MinecraftServer server) {
         finishNow = false;
         if (crackStage != 0) {
-            paintCracks(server, Blocks.PURPLE_CONCRETE.defaultBlockState());
+            paintCracks(server, RiftIsland.crackState());
         }
         killing = true;
         Rift.cmd(server, "kill @e[tag=riss_boss]");

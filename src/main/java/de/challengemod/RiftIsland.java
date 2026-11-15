@@ -29,6 +29,11 @@ final class RiftIsland {
     private RiftIsland() {
     }
 
+    /** Der Block, aus dem die Risse im Ruhezustand bestehen: dunkel mit lila Adern, leuchtet leicht. */
+    static BlockState crackState() {
+        return Blocks.CRYING_OBSIDIAN.defaultBlockState();
+    }
+
     static double hash(int a, int b, int c) {
         int n = a * 374761393 + b * 668265263 + c * 1274126177;
         n = (n ^ (n >>> 13)) * 1274126177;
@@ -86,7 +91,7 @@ final class RiftIsland {
         palette[SAND] = Blocks.SMOOTH_SANDSTONE.defaultBlockState();
         palette[SAND_L] = Blocks.CUT_SANDSTONE.defaultBlockState();
         palette[PLAZA] = Blocks.END_STONE_BRICKS.defaultBlockState();
-        palette[CRACK] = Blocks.PURPLE_CONCRETE.defaultBlockState();
+        palette[CRACK] = crackState();
         palette[PET_D] = Blocks.AMETHYST_BLOCK.defaultBlockState();
         palette[PET_M] = Blocks.PURPUR_BLOCK.defaultBlockState();
         palette[PET_L] = Blocks.PEARLESCENT_FROGLIGHT.defaultBlockState();
