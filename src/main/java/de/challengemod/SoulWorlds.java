@@ -2,7 +2,6 @@ package de.challengemod;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -14,19 +13,15 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Ziel 6 „Seelenwelten“: Die Spieler starten getrennt im Himmelsreich (Rolle 1) und im Tiefenreich (Rolle 2).
- * Die beiden Dimensionen kommen aus dem Zusatz-Datapack (challenge:himmel, challenge:tiefe).
- *  - Start: sicheren Platz suchen bzw. bauen, hinteleportieren, Startpaket geben
+ * Ziel 6 „Seelenwelten“: Ein Spieler lebt in der Oberwelt (Rolle 1), der andere im Nether (Rolle 2).
+ *  - Start: beide Tore bauen (Rift), den Nether-Spieler vor sein Tor bringen, Startpaket geben
  *  - Seelentruhe: Die Endertruhen-Inventare aller Spieler werden gleich gehalten (gemeinsames Lager)
- *  - Seelenstein: öffnet die Seelentruhe überall; Schleichen + Rechtsklick zeigt den Zustand der anderen
+ *  - Seelenstein: öffnet die Seelentruhe überall; Schleichen + Rechtsklick zeigt den Partner, das Tor und die Siegel
+ *  - Siegel: Rechtsklick in der Nähe des eigenen Tors setzt sie ein (Rift.useSeal)
  */
 final class SoulWorlds {
-    private static final int FLAGS = 2 | 16 | 32 | 512;
     private static List<ItemStack> shared;
     private static boolean errorLogged;
 
@@ -35,6 +30,8 @@ final class SoulWorlds {
 
     static void reset() {
         shared = null;
+        Rift.reset();
+        RiftBoss.reset();
     }
 
     private static boolean active(MinecraftServer server) {
@@ -43,8 +40,10 @@ final class SoulWorlds {
 
     static void tick(MinecraftServer server) {
         try {
+            Rift.tickAlways(server);
             if (!active(server)) {
                 shared = null;
+                RiftBoss.hideBarIfShown(server);
                 return;
             }
             if (Scores.get(server, "#sw_start", "sb", 0) == 1) {
@@ -52,30 +51,48 @@ final class SoulWorlds {
                 setup(server);
             }
             syncChests(server);
+            if (Scores.get(server, "#paused", "sb", 0) == 0) {
+                Rift.tick(server);
+            }
         } catch (Throwable t) {
             logOnce(t);
         }
     }
 
     // ------------------------------------------------------------------ Start
-    private static ServerLevel findLevel(MinecraftServer server, String id) {
-        for (ServerLevel level : server.getAllLevels()) {
-            if (level.dimension().toString().contains(id)) {
-                return level;
+    private static void setup(MinecraftServer server) {
+        // Jeder Versuch nach dem ersten startet 100.000 Blöcke weiter östlich: unberührte Oberwelt,
+        // und der Nether dazu liegt 12.500 Blöcke weiter – ebenfalls unberührt.
+        int run = Scores.get(server, "#sw_run", "sb", 0);
+        ChallengeMod.runAsServer(server, "scoreboard players set #sw_run sb " + (run + 1));
+        int anchorX = 0;
+        int anchorZ = 0;
+        int[] fresh = null;
+        ServerLevel overworld = Rift.findLevel(server, Rift.OVERWORLD);
+        if (run > 0 && overworld != null) {
+            fresh = Rift.freshSpot(overworld, (run % 250) * 100000, 0);
+            anchorX = fresh[0];
+            anchorZ = fresh[2];
+            ChallengeMod.runAsServer(server, "execute in " + Rift.OVERWORLD + " run setworldspawn " + fresh[0] + " " + fresh[1] + " " + fresh[2]);
+        } else {
+            // erster Versuch: Das Oberwelt-Tor entsteht rund 100 Blöcke östlich vom Oberwelt-Spieler
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                if (Scores.get(server, player.getScoreboardName(), "sb.role", 0) == 1
+                        && player.level().dimension().toString().contains(Rift.OVERWORLD)) {
+                    anchorX = (int) Math.floor(player.getX());
+                    anchorZ = (int) Math.floor(player.getZ());
+                    break;
+                }
             }
         }
-        return null;
-    }
-
-    private static void setup(MinecraftServer server) {
-        ServerLevel sky = findLevel(server, "challenge:himmel");
-        ServerLevel deep = findLevel(server, "challenge:tiefe");
-        if (sky == null || deep == null) {
-            ChallengeMod.runAsServer(server, "function " + ChallengeMod.NS + ":welten/missing");
+        if (!Rift.setup(server, anchorX, anchorZ)) {
             return;
         }
-        BlockPos skySpot = findSkySpot(sky);
-        BlockPos deepSpot = findDeepSpot(deep);
+        if (fresh != null) {
+            Rift.broadcast(server, "§d☯ Versuch " + (run + 1) + ": §7Ihr startet in einem unberührten Gebiet von Oberwelt und Nether, weit weg vom letzten Versuch.");
+        }
+        int[] over = Rift.gate(server, 1);
+        int[] nether = Rift.gate(server, 2);
         shared = new ArrayList<>();
         for (int i = 0; i < 27; i++) {
             shared.add(ItemStack.EMPTY);
@@ -90,83 +107,30 @@ final class SoulWorlds {
             for (int i = 0; i < chest.getContainerSize(); i++) {
                 chest.setItem(i, ItemStack.EMPTY);
             }
-            BlockPos spot = role == 1 ? skySpot : deepSpot;
-            String dimension = role == 1 ? "challenge:himmel" : "challenge:tiefe";
-            ChallengeMod.runAsServer(server, "execute in " + dimension + " run tp " + name + " "
-                    + (spot.getX() + 0.5) + " " + spot.getY() + " " + (spot.getZ() + 0.5));
             ChallengeMod.runAsServer(server, "give " + name + " " + ChallengeMod.NS + ":soul_stone");
+            for (String seal : ModItems.SEAL_IDS) {
+                ChallengeMod.runAsServer(server, "recipe give " + name + " " + ChallengeMod.NS + ":" + seal);
+            }
             if (role == 2) {
+                ChallengeMod.runAsServer(server, "execute in " + Rift.NETHER + " run tp " + name + " " + (nether[0] + 0.5) + " "
+                        + nether[1] + " " + (nether[2] + 9.5) + " 180 0");
+                ChallengeMod.runAsServer(server, "execute in " + Rift.NETHER + " run spawnpoint " + name + " " + nether[0] + " "
+                        + nether[1] + " " + (nether[2] + 9));
                 ChallengeMod.runAsServer(server, "give " + name + " minecraft:wooden_pickaxe");
-                ChallengeMod.runAsServer(server, "give " + name + " minecraft:torch 16");
                 ChallengeMod.runAsServer(server, "give " + name + " minecraft:bread 8");
-            }
-        }
-    }
-
-    /** Himmelsreich: nächstgelegene Insel-Oberfläche um den Nullpunkt, sonst eine kleine Startinsel bauen. */
-    private static BlockPos findSkySpot(ServerLevel level) {
-        for (int cx = -1; cx <= 1; cx++) {
-            for (int cz = -1; cz <= 1; cz++) {
-                level.getChunk(cx, cz); // erzeugt/lädt den Chunk sofort
-            }
-        }
-        int minY = level.getMinY();
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        BlockPos best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (int x = -14; x <= 30; x++) {
-            for (int z = -14; z <= 30; z++) {
-                int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
-                if (top <= minY + 8) {
-                    continue; // hier ist nur Leere
+                player.sendSystemMessage(Component.literal("§c☯ Du lebst im Nether. §7Dein Tor steht direkt vor dir ("
+                        + nether[0] + " / " + nether[1] + " / " + (nether[2] + 2) + ")."));
+            } else {
+                if (fresh != null) {
+                    ChallengeMod.runAsServer(server, "execute in " + Rift.OVERWORLD + " run tp " + name + " " + (fresh[0] + 0.5) + " "
+                            + fresh[1] + " " + (fresh[2] + 0.5));
+                    ChallengeMod.runAsServer(server, "execute in " + Rift.OVERWORLD + " run spawnpoint " + name + " " + fresh[0] + " "
+                            + fresh[1] + " " + fresh[2]);
                 }
-                int distance = (x - 8) * (x - 8) + (z - 8) * (z - 8);
-                if (distance < bestDistance && level.getBlockState(pos.set(x, top - 1, z)).canOcclude()) {
-                    bestDistance = distance;
-                    best = new BlockPos(x, top, z);
-                }
+                player.sendSystemMessage(Component.literal("§b☯ Du lebst in der Oberwelt. §7Dein Tor steht bei "
+                        + over[0] + " / " + over[1] + " / " + (over[2] + 2) + " (rund 100 Blöcke östlich)."));
             }
         }
-        if (best != null) {
-            return best;
-        }
-        BlockState grass = Blocks.GRASS_BLOCK.defaultBlockState();
-        BlockState dirt = Blocks.DIRT.defaultBlockState();
-        for (int x = 5; x <= 11; x++) {
-            for (int z = 5; z <= 11; z++) {
-                level.setBlock(new BlockPos(x, 127, z), dirt, FLAGS);
-                level.setBlock(new BlockPos(x, 128, z), grass, FLAGS);
-            }
-        }
-        return new BlockPos(8, 129, 8);
-    }
-
-    /** Tiefenreich: ein Höhlenboden mit Platz zum Stehen, sonst einen kleinen Raum in den Stein hauen. */
-    private static BlockPos findDeepSpot(ServerLevel level) {
-        level.getChunk(0, 0);
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int y = 70; y >= -40; y--) {
-            for (int x = 3; x <= 12; x++) {
-                for (int z = 3; z <= 12; z++) {
-                    if (level.getBlockState(pos.set(x, y, z)).canOcclude()
-                            && level.getBlockState(pos.set(x, y + 1, z)).isAir()
-                            && level.getBlockState(pos.set(x, y + 2, z)).isAir()
-                            && level.getBlockState(pos.set(x, y + 3, z)).isAir()) {
-                        return new BlockPos(x, y + 1, z);
-                    }
-                }
-            }
-        }
-        BlockState air = Blocks.AIR.defaultBlockState();
-        for (int x = 6; x <= 10; x++) {
-            for (int z = 6; z <= 10; z++) {
-                level.setBlock(new BlockPos(x, 39, z), Blocks.DEEPSLATE.defaultBlockState(), FLAGS);
-                for (int y = 40; y <= 42; y++) {
-                    level.setBlock(new BlockPos(x, y, z), air, FLAGS);
-                }
-            }
-        }
-        return new BlockPos(8, 40, 8);
     }
 
     // ------------------------------------------------------------------ Seelentruhe
@@ -219,11 +183,20 @@ final class SoulWorlds {
     static InteractionResult useItem(Player player, Level level, InteractionHand hand) {
         try {
             ItemStack stack = player.getItemInHand(hand);
-            if (!stack.is(ModItems.SOUL_STONE) || !(player instanceof ServerPlayer serverPlayer)) {
+            if (!(player instanceof ServerPlayer serverPlayer)) {
                 return InteractionResult.PASS;
             }
             MinecraftServer server = serverPlayer.level().getServer();
             if (server == null) {
+                return InteractionResult.PASS;
+            }
+            for (int i = 0; i < ModItems.SEALS.length; i++) {
+                if (stack.is(ModItems.SEALS[i])) {
+                    Rift.useSeal(server, serverPlayer, stack, i);
+                    return InteractionResult.SUCCESS;
+                }
+            }
+            if (!stack.is(ModItems.SOUL_STONE)) {
                 return InteractionResult.PASS;
             }
             if (serverPlayer.isShiftKeyDown()) {
@@ -234,14 +207,22 @@ final class SoulWorlds {
                     }
                     any = true;
                     String where = other.level().dimension().toString();
-                    String world = where.contains("himmel") ? "Himmelsreich" : where.contains("tiefe") ? "Tiefenreich"
-                            : where.contains("thron") ? "Thron der Leere" : "andere Welt";
+                    String world = where.contains("the_nether") ? "Nether" : where.contains("overworld") ? "Oberwelt"
+                            : where.contains("riss") ? "Der Riss" : "andere Welt";
                     serverPlayer.sendSystemMessage(Component.literal("☯ " + other.getScoreboardName() + ": "
                             + (int) Math.ceil(other.getHealth() / 2.0) + " Herzen, " + world + " bei "
                             + (int) other.getX() + " / " + (int) other.getY() + " / " + (int) other.getZ()));
                 }
                 if (!any) {
                     serverPlayer.sendSystemMessage(Component.literal("☯ Der Seelenstein bleibt still – niemand sonst ist da."));
+                }
+                int role = Scores.get(server, serverPlayer.getScoreboardName(), "sb.role", 0);
+                if (Rift.score(server, "#rift_phase") == 1 && (role == 1 || role == 2)) {
+                    int[] g = Rift.gate(server, role);
+                    int distance = (int) Math.hypot(serverPlayer.getX() - g[0], serverPlayer.getZ() - (g[2] + 2));
+                    serverPlayer.sendSystemMessage(Component.literal("§d✦ Dein Tor: " + g[0] + " / " + g[1] + " / " + (g[2] + 2)
+                            + " §7(" + distance + " Blöcke entfernt)"));
+                    serverPlayer.sendSystemMessage(Component.literal("§d✦ Siegel: §7" + Rift.sealStatus(server)));
                 }
             } else {
                 serverPlayer.openMenu(new SimpleMenuProvider(

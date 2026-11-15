@@ -217,8 +217,9 @@ final class BlockRandomizer {
      * Enderaugen und Lohenstaub bleiben normal, damit das Ende erreichbar ist.
      */
     static Item craftItem(MinecraftServer server, Item original) {
-        if (original == Items.ENDER_EYE || original == Items.BLAZE_POWDER) {
-            return original;
+        if (original == Items.ENDER_EYE || original == Items.BLAZE_POWDER
+                || BuiltInRegistries.ITEM.getKey(original).getNamespace().equals(ChallengeMod.NS)) {
+            return original; // auch die Siegel und der Seelenstein bleiben, was sie sind
         }
         Pools pools = pools(server);
         Item cached = pools.craftItems.get(original);
@@ -251,6 +252,9 @@ final class BlockRandomizer {
         p.seed = seed;
         for (Item item : BuiltInRegistries.ITEM) {
             String id = BuiltInRegistries.ITEM.getKey(item).getPath();
+            if (BuiltInRegistries.ITEM.getKey(item).getNamespace().equals(ChallengeMod.NS)) {
+                continue; // eigene Items (Siegel, Seelenstein) fallen nie zufällig aus Blöcken
+            }
             if (item == Items.AIR || BANNED.contains(id) || id.endsWith("_spawn_egg") || id.startsWith("netherite_")
                     || id.contains("infested") || id.endsWith("_smithing_template") || id.startsWith("music_disc")) {
                 continue;

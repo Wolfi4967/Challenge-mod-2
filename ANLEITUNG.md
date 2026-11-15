@@ -2,9 +2,10 @@
 
 Ein Fabric-Mod für **Minecraft 26.3** im BastiGHG-Stil. Ihr baut euch eure Challenge im Menü zusammen:
 geteilter Schmerz, Seelenband, Kette wie in *Chained Together*, Mutationen, Mob- und Block-Randomizer,
-Zufallseffekte, Ultra Hardcore – und ein Ziel (Enderdrache, Wither, Wärter, Ältester Wächter oder alle vier).
+Zufallseffekte, Ultra Hardcore – und ein Ziel (Enderdrache, Wither, Wärter, Ältester Wächter, alle vier
+oder die eigene Challenge „Seelenwelten“ mit eigenem Boss).
 
-**Ab Version 1.1.0 brauchen alle Spieler den Mod** (Fabric + dieselbe `.jar`), weil der Mod jetzt eigene Items mitbringt.
+**Alle Spieler brauchen den Mod** (Fabric + dieselbe `.jar`), weil der Mod eigene Items und einen eigenen Block mitbringt.
 
 ---
 
@@ -66,18 +67,50 @@ Du musst dafür nichts installieren. Es sind nur **12 Dateien** – GitHub schaf
      Mob-Randomizer, Block-Randomizer, Zufallseffekte
    - **Seite 4 – Welt & Beute:** Chunk-Versatz (Chunks hoch/runter), Zufalls-Biom pro Chunk,
      Mob-Drop-Randomizer, Truhen- & Angel-Randomizer, Crafting-Randomizer
-   - **Seite 3 – Ziel & Leben:** Ziel (Enderdrache, Wither, Wärter, Ältester Wächter, alle vier)
+   - **Seite 3 – Ziel & Leben:** Ziel (Enderdrache, Wither, Wärter, Ältester Wächter, alle vier, Seelenwelten)
      und was beim Tod passiert (alle verlieren / nur er scheidet aus)
 5. **„▶ Challenge starten“** – 3, 2, 1, los!
 6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen dieselbe Mod-Datei wie du.
 
-### Ziel „Seelenwelten“ (Etappe 1)
+### Ziel „Seelenwelten: Der Zerrissene“ (ab Version 1.2.0)
 
-- Beim **Erstellen der Welt** zusätzlich `Seelenwelten-Dimensionen.zip` unter **Mehr → Datenpakete** hinzufügen
-  (Minecraft warnt vor „experimentellen Einstellungen“ – bestätigen).
-- Auf Seite 3 „Ziel & Leben“ das Ziel **Seelenwelten** wählen und starten.
-- Einer landet im **Himmelsreich** (Inseln, Holz, Essen), der andere im **Tiefenreich** (Höhlen, Erze).
-- Der **Seelenstein** öffnet per Rechtsklick die gemeinsame Seelentruhe; Schleichen + Rechtsklick zeigt den Partner.
+Kein Zusatz-Datenpaket mehr nötig – `Seelenwelten-Dimensionen.zip` könnt ihr weglassen.
+
+**Jeder neue Versuch startet frisch (ab 1.3.0):** Der erste Versuch beginnt am normalen Startpunkt. Jeder weitere
+(„Neuer Versuch in dieser Welt“) beginnt 100.000 Blöcke weiter östlich in unberührter Oberwelt, der Nether dazu
+liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
+
+1. Auf Seite 3 „Ziel & Leben“ das Ziel **Seelenwelten** wählen und starten.
+2. Einer bleibt in der **Oberwelt**, der andere landet im **Nether** (wer, entscheidet der Zufall).
+   Normale Netherportale sind gesperrt.
+3. In jeder Welt steht ein **versiegeltes Tor**. Das Oberwelt-Tor steht rund 100 Blöcke östlich vom Start,
+   das Nether-Tor direkt vor dem Nether-Spieler. Die Koordinaten stehen im Chat.
+4. Jedes Tor braucht **vier Siegel**. Jedes Siegel braucht Zutaten aus beiden Welten (Rezepte im Rezeptbuch, Werkbank 3×3):
+
+   | Siegel | aus der Oberwelt | aus dem Nether |
+   |---|---|---|
+   | Glut | 4 Eisenbarren, 1 Kohleblock | 2 Quarz, 2 Magmablöcke |
+   | Tiefe | 4 Diamanten, 1 Obsidian | 4 Lohenruten |
+   | Leere | 4 Enderperlen, 2 Amethystscherben, 1 Lapisblock | 2 Ghast-Tränen |
+   | Seele | 2 Echoscherben, 1 Amethystblock | 2 Netheritplatten, 4 Seelensand |
+
+5. Material tauscht ihr über die **Seelentruhe** (Rechtsklick mit dem **Seelenstein**).
+   Schleichen + Rechtsklick zeigt den Partner, euer Tor und wie viele Siegel schon sitzen.
+6. Ein Siegel setzt ihr mit **Rechtsklick in der Nähe eures Tors** ein.
+7. Sitzen alle acht Siegel, öffnen sich beide Tore. Stellt euch **gleichzeitig** in euer Tor und bleibt 3 Sekunden stehen.
+8. Ihr landet auf der Insel **„Der Riss“**. Geht zur Blüte in der Mitte.
+9. **Der Zerrissene:**
+   - **Lichtform** (gold): nur der Nether-Spieler kann ihn verletzen. Blitze schlagen dort ein, wo ihr gerade steht.
+   - **Ascheform** (schwarz): nur der Oberwelt-Spieler kann ihn verletzen. Ascheschläge explodieren, wo ihr gerade steht.
+   - Leuchten die **Risse** im Boden hell auf, brechen sie zwei Sekunden später aus – runter von den hellen Linien.
+   - Bei den letzten 10 % Leben müsst ihr ihn **beide innerhalb von 5 Sekunden** treffen.
+
+**Zum Ausprobieren** (während die Challenge mit diesem Ziel läuft):
+
+| Befehl | Was passiert |
+|---|---|
+| `/challenge test tor` | setzt alle Siegel in beide Tore ein |
+| `/challenge test insel` | bringt alle Spieler sofort auf die Boss-Insel |
 
 ### Befehle (für alle Spieler, keine Cheats nötig)
 

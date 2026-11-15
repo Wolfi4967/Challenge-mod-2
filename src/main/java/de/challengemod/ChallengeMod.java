@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
@@ -32,7 +33,9 @@ public class ChallengeMod implements ModInitializer {
     @Override
     public void onInitialize() {
         ModItems.initialize();
-        // Seelenwelten: Start in den neuen Dimensionen, gemeinsame Seelentruhe, Seelenstein
+        ModBlocks.initialize();
+        // Seelenwelten: Tore, Siegel, gemeinsame Seelentruhe, Seelenstein und der Bosskampf im Riss
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register(RiftBoss::allowDamage);
         ServerTickEvents.END_SERVER_TICK.register(SoulWorlds::tick);
         UseItemCallback.EVENT.register(SoulWorlds::useItem);
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));
@@ -74,6 +77,10 @@ public class ChallengeMod implements ModInitializer {
                 .then(Commands.literal("stats").executes(ctx -> fn(ctx, "stats/print")))
                 .then(Commands.literal("chat").executes(ctx -> fn(ctx, "menu/show")))
                 .then(Commands.literal("close").executes(ChallengeMod::closeDialog))
+                // zum Ausprobieren von „Seelenwelten“: /challenge test tor | insel
+                .then(Commands.literal("test")
+                        .then(Commands.literal("tor").executes(ctx -> test(ctx, false)))
+                        .then(Commands.literal("insel").executes(ctx -> test(ctx, true))))
                 // wird von den Einstellungs-Fenstern benutzt: /challenge apply <seite> <werte …>
                 .then(Commands.literal("apply")
                         .then(Commands.argument("page", StringArgumentType.word())
@@ -111,6 +118,23 @@ public class ChallengeMod implements ModInitializer {
             LOGGER.error("Befehl fehlgeschlagen: {}", command, e);
             return 0;
         }
+    }
+
+    /** Abkürzungen zum Testen: alle Siegel einsetzen bzw. direkt auf die Boss-Insel. */
+    private static int test(CommandContext<CommandSourceStack> ctx, boolean island) {
+        CommandSourceStack source = ctx.getSource();
+        MinecraftServer server = source.getServer();
+        if (Scores.get(server, "#state", "sb", 4) != 1 || Scores.get(server, "#goal", "sb.cfg", 1) != 6
+                || Rift.score(server, "#rift_phase") < 1) {
+            source.sendFailure(Component.literal("Das geht nur, während die Challenge mit dem Ziel „Seelenwelten“ läuft."));
+            return 0;
+        }
+        if (island) {
+            Rift.enter(server);
+        } else {
+            Rift.testOpen(server);
+        }
+        return 1;
     }
 
     private static int closeDialog(CommandContext<CommandSourceStack> ctx) {
