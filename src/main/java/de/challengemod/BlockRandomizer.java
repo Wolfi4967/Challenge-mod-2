@@ -1,5 +1,8 @@
 package de.challengemod;
 
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.server.level.ServerLevel;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -100,7 +103,7 @@ final class BlockRandomizer {
                 return; // Block ohne Beute (z. B. Spawner) bzw. hat schon gedroppt
             }
             String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
-            if (id.endsWith("shulker_box") || SKIP.contains(id)) {
+            if (SKIP.contains(id)) {
                 return;
             }
             Item target = mapping(server).get(block);
@@ -152,7 +155,7 @@ final class BlockRandomizer {
                 return;
             }
             String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
-            if (id.endsWith("shulker_box") || SKIP.contains(id)) {
+            if (SKIP.contains(id)) {
                 return;
             }
             Item target = mapping(server).get(block);
@@ -229,6 +232,35 @@ final class BlockRandomizer {
             pools.craftItems.put(original, cached);
         }
         return cached;
+    }
+
+    /**
+     * Cushions sind in 26.3 keine Blöcke, sondern Objekte in der Welt. Bricht eins ab, entsteht direkt ein Item –
+     * ohne Beutetabelle. Dieses frisch entstandene Item wird hier getauscht (Fabric-Ereignis „Objekt geladen“).
+     */
+    static void onEntityLoad(Entity entity, ServerLevel level) {
+        try {
+            if (!(entity instanceof ItemEntity drop) || drop.getAge() != 0 || drop.getOwner() != null) {
+                return; // nur frisch entstandene Items, die niemand geworfen hat
+            }
+            ItemStack stack = drop.getItem();
+            if (stack.isEmpty() || !BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().endsWith("_cushion")) {
+                return;
+            }
+            MinecraftServer server = level.getServer();
+            if (server == null || !Scores.running(server) || Scores.get(server, "#m_brand", "sb.cfg", 0) != 1) {
+                return;
+            }
+            Pools pools = pools(server);
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            Item target = pools.all.get(new Random(pools.seed * 977L + id.hashCode()).nextInt(pools.all.size()));
+            drop.setItem(new ItemStack(target));
+        } catch (Throwable t) {
+            if (!errorLogged) {
+                errorLogged = true;
+                ChallengeMod.LOGGER.error("Block-Randomizer ist ausgefallen (wird nur einmal gemeldet)", t);
+            }
+        }
     }
 
     private static final class Pools {

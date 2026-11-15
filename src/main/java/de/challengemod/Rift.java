@@ -457,6 +457,41 @@ final class Rift {
         }
     }
 
+    /** /challenge reset: beide Tore wieder versiegeln, alle Siegel entfernen, Bosskampf abbrechen. */
+    static boolean resetGates(MinecraftServer server) {
+        int phase = score(server, "#rift_phase");
+        if (phase < 1) {
+            return false;
+        }
+        ServerLevel over = findLevel(server, OVERWORLD);
+        ServerLevel nether = findLevel(server, NETHER);
+        int[] a = gate(server, 1);
+        int[] b = gate(server, 2);
+        if (over != null) {
+            setSockets(over, a[0], a[1], a[2], 0);
+            setFill(over, a[0], a[1], a[2], false);
+        }
+        if (nether != null) {
+            setSockets(nether, b[0], b[1], b[2], 0);
+            setFill(nether, b[0], b[1], b[2], false);
+        }
+        set(server, "#seals_ow", 0);
+        set(server, "#seals_ne", 0);
+        set(server, "#rift_open", 0);
+        set(server, "#rift_phase", 1);
+        countdown = 0;
+        returnTimer = 0;
+        RiftBoss.prepare(server);
+        if (phase >= 2) {
+            // wer schon auf der Insel war, steht wieder vor seinem Tor
+            for (ServerPlayer player : rolePlayers(server)) {
+                tpFront(server, player, role(server, player));
+            }
+        }
+        broadcast(server, "§d✦ Die Tore sind wieder versiegelt. §7Alle acht Siegel müssen neu eingesetzt werden.");
+        return true;
+    }
+
     // ------------------------------------------------------------------ Tick
     static void tick(MinecraftServer server) {
         clock++;
@@ -620,6 +655,6 @@ final class Rift {
         set(server, "#rift_phase", 2);
         title(server, "DER RISS", "light_purple", "Geht zur Blüte in der Mitte");
         sound(server, "minecraft:block.end_portal.spawn", 0.7);
-        broadcast(server, "§d☯ Ihr steht zum ersten Mal nebeneinander. §7Geht zur Blüte in der Mitte – dort wartet der Zerrissene.");
+        broadcast(server, "§d☯ Ihr steht zum ersten Mal nebeneinander. §7Geht zur großen Blüte in der Mitte – dort wartet die Rissblüte.");
     }
 }

@@ -72,7 +72,7 @@ Du musst dafür nichts installieren. Es sind nur **12 Dateien** – GitHub schaf
 5. **„▶ Challenge starten“** – 3, 2, 1, los!
 6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen dieselbe Mod-Datei wie du.
 
-### Ziel „Seelenwelten: Der Zerrissene“ (ab Version 1.2.0)
+### Ziel „Seelenwelten: Die Rissblüte“ (ab Version 1.2.0)
 
 Kein Zusatz-Datenpaket mehr nötig – `Seelenwelten-Dimensionen.zip` könnt ihr weglassen.
 
@@ -99,11 +99,16 @@ liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
 6. Ein Siegel setzt ihr mit **Rechtsklick in der Nähe eures Tors** ein.
 7. Sitzen alle acht Siegel, öffnen sich beide Tore. Stellt euch **gleichzeitig** in euer Tor und bleibt 3 Sekunden stehen.
 8. Ihr landet auf der Insel **„Der Riss“**. Geht zur Blüte in der Mitte.
-9. **Der Zerrissene:**
-   - **Lichtform** (gold): nur der Nether-Spieler kann ihn verletzen. Blitze schlagen dort ein, wo ihr gerade steht.
-   - **Ascheform** (schwarz): nur der Oberwelt-Spieler kann ihn verletzen. Ascheschläge explodieren, wo ihr gerade steht.
-   - Leuchten die **Risse** im Boden hell auf, brechen sie zwei Sekunden später aus – runter von den hellen Linien.
-   - Bei den letzten 10 % Leben müsst ihr ihn **beide innerhalb von 5 Sekunden** treffen.
+9. **Die Rissblüte** – eine riesige Knospe in der Blüte, umkreist von einem Kristallkranz:
+   - **Geschlossen** ist sie unverwundbar und greift an. **Offen** ist sie verwundbar.
+   - **Weiß (Lichtblüte):** nur der Nether-Spieler kann sie verletzen. **Schwarz (Schattenblüte):** nur der Oberwelt-Spieler.
+     Die Farbe wechselt bei jedem Schließen. Der andere wehrt solange die Schwebe-Geschosse ab (man kann sie wegschlagen).
+   - **Risse:** leuchten hell auf und brechen zwei Sekunden später aus – runter von den hellen Linien.
+   - **Druckwellen:** lila Ringe laufen von der Mitte nach außen – drüberspringen.
+   - **Splitterregen:** Kristalle fallen dorthin, wo ihr steht – in Bewegung bleiben.
+   - **Sog:** zieht euch zur Blüte, danach entlädt sie sich – weglaufen.
+   - Unter halbem Leben kommen zwei Angriffe pro Runde und Endermilben aus den Rissen.
+   - Bei den letzten 10 % Leben müsst ihr sie **beide innerhalb von 5 Sekunden** treffen.
 
 **Zum Ausprobieren** (während die Challenge mit diesem Ziel läuft):
 
@@ -111,6 +116,7 @@ liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
 |---|---|
 | `/challenge test tor` | setzt alle Siegel in beide Tore ein |
 | `/challenge test insel` | bringt alle Spieler sofort auf die Boss-Insel |
+| `/challenge reset` | versiegelt beide Tore wieder, entfernt alle Siegel und bricht den Bosskampf ab |
 
 ### Befehle (für alle Spieler, keine Cheats nötig)
 

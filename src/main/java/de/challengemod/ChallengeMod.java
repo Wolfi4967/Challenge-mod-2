@@ -7,6 +7,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -41,6 +42,8 @@ public class ChallengeMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(ChainPhysics::tick);
         LootTableEvents.MODIFY_DROPS.register(BlockRandomizer::modifyDrops);
+        // Block-Randomizer: auch Cushions (Objekte, keine Blöcke) lassen ein Zufalls-Item fallen
+        ServerEntityEvents.ENTITY_LOAD.register(BlockRandomizer::onEntityLoad);
         // Block-Randomizer: Blöcke droppen auch ohne das passende Werkzeug
         PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> BlockRandomizer.beforeBreak());
         PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> BlockRandomizer.afterBreak(level, player, pos, state));
@@ -77,6 +80,8 @@ public class ChallengeMod implements ModInitializer {
                 .then(Commands.literal("stats").executes(ctx -> fn(ctx, "stats/print")))
                 .then(Commands.literal("chat").executes(ctx -> fn(ctx, "menu/show")))
                 .then(Commands.literal("close").executes(ChallengeMod::closeDialog))
+                // „Seelenwelten“: beide Tore zurücksetzen
+                .then(Commands.literal("reset").executes(ChallengeMod::resetGates))
                 // zum Ausprobieren von „Seelenwelten“: /challenge test tor | insel
                 .then(Commands.literal("test")
                         .then(Commands.literal("tor").executes(ctx -> test(ctx, false)))
@@ -118,6 +123,14 @@ public class ChallengeMod implements ModInitializer {
             LOGGER.error("Befehl fehlgeschlagen: {}", command, e);
             return 0;
         }
+    }
+
+    private static int resetGates(CommandContext<CommandSourceStack> ctx) {
+        if (!Rift.resetGates(ctx.getSource().getServer())) {
+            ctx.getSource().sendFailure(Component.literal("Es gibt noch keine Tore. Starte zuerst die Challenge mit dem Ziel „Seelenwelten“."));
+            return 0;
+        }
+        return 1;
     }
 
     /** Abkürzungen zum Testen: alle Siegel einsetzen bzw. direkt auf die Boss-Insel. */
