@@ -120,6 +120,7 @@ final class BlockRandomizer {
 
     static void reset() {
         mapping = null;
+        pools = null;
         tableToBlock = null;
         pendingKey = null;
         droppedThisBreak.clear();
@@ -128,11 +129,8 @@ final class BlockRandomizer {
 
     static void modifyDrops(Holder<LootTable> holder, LootContext context, List<ItemStack> drops) {
         try {
-            if (drops.isEmpty()) {
-                return;
-            }
             MinecraftServer server = context.getLevel().getServer();
-            if (!Scores.running(server) || Scores.get(server, "#m_brand", "sb.cfg", 0) != 1) {
+            if (!Scores.running(server)) {
                 return;
             }
             var key = holder.unwrapKey();
@@ -141,7 +139,11 @@ final class BlockRandomizer {
             }
             Block block = tables().get(key.get());
             if (block == null) {
-                return; // kein Block-Loot (Truhe, Mob, Angeln …)
+                otherLoot(server, key.get().toString(), drops); // Mob, Truhe, Angeln …
+                return;
+            }
+            if (drops.isEmpty() || Scores.get(server, "#m_brand", "sb.cfg", 0) != 1) {
+                return;
             }
             if (key.get().equals(pendingKey) && pendingTick == server.getTickCount()) {
                 // Dieser Block hat sein Item beim Abbauen schon bekommen -> den normalen Drop streichen
@@ -169,6 +171,102 @@ final class BlockRandomizer {
         }
     }
 
+    /** Mob-Drop-Randomizer (#m_mobdrop) und Truhen-/Angel-Randomizer (#m_chest). */
+    private static void otherLoot(MinecraftServer server, String table, List<ItemStack> drops) {
+        if (table.contains("entities/")) {
+            if (Scores.get(server, "#m_mobdrop", "sb.cfg", 0) == 1) {
+                drops.clear();
+                drops.add(new ItemStack(mobItem(server, table)));
+            }
+        } else if (table.contains("chests/") || table.contains("gameplay/fishing")) {
+            if (Scores.get(server, "#m_chest", "sb.cfg", 0) == 1) {
+                List<Item> all = pools(server).all;
+                Random random = new Random();
+                for (int i = 0; i < drops.size(); i++) {
+                    Item item = all.get(random.nextInt(all.size()));
+                    int count = Math.max(1, Math.min(drops.get(i).getCount(), new ItemStack(item).getMaxStackSize()));
+                    drops.set(i, new ItemStack(item, count));
+                }
+            }
+        }
+    }
+
+    /** Jede Mob-Art droppt ein festes Item. Lohenruten und Enderperlen bleiben erreichbar (für das Ziel Enderdrache). */
+    private static Item mobItem(MinecraftServer server, String table) {
+        Pools pools = pools(server);
+        Item cached = pools.mobItems.get(table);
+        if (cached != null) {
+            return cached;
+        }
+        String[] common = {"entities/zombie]", "entities/skeleton]", "entities/creeper]", "entities/spider]"};
+        int rotate = (int) Math.floorMod(pools.seed, 4L);
+        Item item;
+        if (table.endsWith(common[rotate])) {
+            item = Items.BLAZE_ROD;
+        } else if (table.endsWith(common[(rotate + 1) % 4])) {
+            item = Items.ENDER_PEARL;
+        } else {
+            item = pools.all.get(new Random(pools.seed * 31L + table.hashCode()).nextInt(pools.all.size()));
+        }
+        pools.mobItems.put(table, item);
+        return item;
+    }
+
+    /**
+     * Crafting-Randomizer: Jedes gecraftete Item wird zu einem festen anderen Item.
+     * Enderaugen und Lohenstaub bleiben normal, damit das Ende erreichbar ist.
+     */
+    static Item craftItem(MinecraftServer server, Item original) {
+        if (original == Items.ENDER_EYE || original == Items.BLAZE_POWDER) {
+            return original;
+        }
+        Pools pools = pools(server);
+        Item cached = pools.craftItems.get(original);
+        if (cached == null) {
+            String id = BuiltInRegistries.ITEM.getKey(original).toString();
+            cached = pools.all.get(new Random(pools.seed * 131L + id.hashCode()).nextInt(pools.all.size()));
+            pools.craftItems.put(original, cached);
+        }
+        return cached;
+    }
+
+    private static final class Pools {
+        long seed;
+        List<Item> all = new ArrayList<>();
+        List<Item> basic = new ArrayList<>();
+        Map<String, Item> mobItems = new HashMap<>();
+        Map<Item, Item> craftItems = new HashMap<>();
+    }
+
+    private static Pools pools;
+
+    /** Alle erlaubten Items (all) und die ohne starke Items (basic), pro Welt und Variante einmal berechnet. */
+    private static Pools pools(MinecraftServer server) {
+        int variant = Scores.get(server, "#bvar", "sb", 1);
+        long seed = server.overworld().getSeed() * 31L + variant * 0x9E3779B97F4A7C15L;
+        if (pools != null && pools.seed == seed) {
+            return pools;
+        }
+        Pools p = new Pools();
+        p.seed = seed;
+        for (Item item : BuiltInRegistries.ITEM) {
+            String id = BuiltInRegistries.ITEM.getKey(item).getPath();
+            if (item == Items.AIR || BANNED.contains(id) || id.endsWith("_spawn_egg") || id.startsWith("netherite_")
+                    || id.contains("infested") || id.endsWith("_smithing_template") || id.startsWith("music_disc")) {
+                continue;
+            }
+            p.all.add(item);
+            if (!STRONG.contains(id)) {
+                p.basic.add(item);
+            }
+        }
+        Comparator<Item> byId = Comparator.comparing(i -> BuiltInRegistries.ITEM.getKey(i).toString());
+        p.all.sort(byId);
+        p.basic.sort(byId);
+        pools = p;
+        return p;
+    }
+
     private static Map<ResourceKey<LootTable>, Block> tables() {
         if (tableToBlock == null) {
             Map<ResourceKey<LootTable>, Block> map = new HashMap<>();
@@ -181,27 +279,14 @@ final class BlockRandomizer {
     }
 
     private static Map<Block, Item> mapping(MinecraftServer server) {
+        Pools p = pools(server);
+        long seed = p.seed;
         int variant = Scores.get(server, "#bvar", "sb", 1);
-        long seed = server.overworld().getSeed() * 31L + variant * 0x9E3779B97F4A7C15L;
         if (mapping != null && mappingId == seed) {
             return mapping;
         }
-        List<Item> all = new ArrayList<>();
-        List<Item> basic = new ArrayList<>();
-        for (Item item : BuiltInRegistries.ITEM) {
-            String id = BuiltInRegistries.ITEM.getKey(item).getPath();
-            if (item == Items.AIR || BANNED.contains(id) || id.endsWith("_spawn_egg") || id.startsWith("netherite_")
-                    || id.contains("infested") || id.endsWith("_smithing_template") || id.startsWith("music_disc")) {
-                continue;
-            }
-            all.add(item);
-            if (!STRONG.contains(id)) {
-                basic.add(item);
-            }
-        }
-        Comparator<Item> byId = Comparator.comparing(i -> BuiltInRegistries.ITEM.getKey(i).toString());
-        all.sort(byId);
-        basic.sort(byId);
+        List<Item> all = p.all;
+        List<Item> basic = p.basic;
         List<Block> blocks = new ArrayList<>();
         for (Block block : BuiltInRegistries.BLOCK) {
             blocks.add(block);

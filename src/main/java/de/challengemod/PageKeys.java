@@ -10,6 +10,7 @@ final class PageKeys {
             case "rules" -> new String[] {"dist", "diff", "regen", "uhc", "schmerz", "band", "rest"};
             case "chaos" -> new String[] {"clen", "chain", "mut", "perm", "mobrand", "brand", "fx"};
             case "goal" -> new String[] {"goal", "death"};
+            case "world" -> new String[] {"cmax", "cshift", "cbiome", "mobdrop", "chest", "craft"};
             default -> null;
         };
     }

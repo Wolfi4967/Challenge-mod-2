@@ -4,7 +4,7 @@ Ein Fabric-Mod für **Minecraft 26.3** im BastiGHG-Stil. Ihr baut euch eure Chal
 geteilter Schmerz, Seelenband, Kette wie in *Chained Together*, Mutationen, Mob- und Block-Randomizer,
 Zufallseffekte, Ultra Hardcore – und ein Ziel (Enderdrache, Wither, Wärter, Ältester Wächter oder alle vier).
 
-**Nur wer die Welt hostet, braucht den Mod.** Deine Freunde können ganz normal (auch mit Lunar) joinen.
+**Ab Version 1.1.0 brauchen alle Spieler den Mod** (Fabric + dieselbe `.jar`), weil der Mod jetzt eigene Items mitbringt.
 
 ---
 
@@ -59,15 +59,25 @@ Du musst dafür nichts installieren. Es sind nur **12 Dateien** – GitHub schaf
    bleibt normales Minecraft, bis ihr eine Challenge einrichtet.
 2. Menü öffnen: **Taste G** · oder **Esc → „⚔ Challenge“** · oder **`/challenge`**
 3. **„⚔ Challenge einrichten“** → ihr seid in der Lobby.
-4. Einstellungen durchklicken (3 Seiten, jeweils **„Speichern & weiter“**):
+4. Einstellungen durchgehen (3 Seiten: auf jeder Seite **„✔ Speichern“** klicken, dann unten zur nächsten Seite blättern):
    - **Seite 1 – Regeln & Distanz:** Seelenband-Distanz (Schieberegler), Schwierigkeit, Regeneration,
      Ultra Hardcore, geteilter Schmerz, Seelenband, Lagerfeuer-Rast
    - **Seite 2 – Chaos & Kette:** Kettenlänge, Kette, Mutationen (wechselnd/dauerhaft),
      Mob-Randomizer, Block-Randomizer, Zufallseffekte
+   - **Seite 4 – Welt & Beute:** Chunk-Versatz (Chunks hoch/runter), Zufalls-Biom pro Chunk,
+     Mob-Drop-Randomizer, Truhen- & Angel-Randomizer, Crafting-Randomizer
    - **Seite 3 – Ziel & Leben:** Ziel (Enderdrache, Wither, Wärter, Ältester Wächter, alle vier)
      und was beim Tod passiert (alle verlieren / nur er scheidet aus)
 5. **„▶ Challenge starten“** – 3, 2, 1, los!
-6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen den Mod **nicht**.
+6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen dieselbe Mod-Datei wie du.
+
+### Ziel „Seelenwelten“ (Etappe 1)
+
+- Beim **Erstellen der Welt** zusätzlich `Seelenwelten-Dimensionen.zip` unter **Mehr → Datenpakete** hinzufügen
+  (Minecraft warnt vor „experimentellen Einstellungen“ – bestätigen).
+- Auf Seite 3 „Ziel & Leben“ das Ziel **Seelenwelten** wählen und starten.
+- Einer landet im **Himmelsreich** (Inseln, Holz, Essen), der andere im **Tiefenreich** (Höhlen, Erze).
+- Der **Seelenstein** öffnet per Rechtsklick die gemeinsame Seelentruhe; Schleichen + Rechtsklick zeigt den Partner.
 
 ### Befehle (für alle Spieler, keine Cheats nötig)
 

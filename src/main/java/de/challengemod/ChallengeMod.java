@@ -5,8 +5,10 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.loot.v3.LootTableEvents;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,13 +31,27 @@ public class ChallengeMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        ModItems.initialize();
+        // Seelenwelten: Start in den neuen Dimensionen, gemeinsame Seelentruhe, Seelenstein
+        ServerTickEvents.END_SERVER_TICK.register(SoulWorlds::tick);
+        UseItemCallback.EVENT.register(SoulWorlds::useItem);
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(ChainPhysics::tick);
         LootTableEvents.MODIFY_DROPS.register(BlockRandomizer::modifyDrops);
         // Block-Randomizer: Blöcke droppen auch ohne das passende Werkzeug
         PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> BlockRandomizer.beforeBreak());
         PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> BlockRandomizer.afterBreak(level, player, pos, state));
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlockRandomizer.reset());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            BlockRandomizer.reset();
+            WorldRandomizer.reset();
+            CraftRandomizer.reset();
+            SoulWorlds.reset();
+        });
+        // Welt-Randomizer: neu erzeugte Chunks versetzen bzw. mit Zufalls-Biom versehen
+        ServerChunkEvents.CHUNK_GENERATE.register(WorldRandomizer::onChunkGenerated);
+        ServerTickEvents.END_SERVER_TICK.register(WorldRandomizer::tick);
+        // Crafting-Randomizer: Ergebnisfeld der Werkbank tauschen
+        ServerTickEvents.END_SERVER_TICK.register(CraftRandomizer::tick);
         LOGGER.info("Challenge-Mod geladen – im Spiel: /challenge oder Taste G");
     }
 
@@ -53,6 +69,7 @@ public class ChallengeMod implements ModInitializer {
                 .then(Commands.literal("settings").executes(ctx -> fn(ctx, "ui/open_settings")))
                 .then(Commands.literal("chaos").executes(ctx -> fn(ctx, "ui/open_chaos")))
                 .then(Commands.literal("goal").executes(ctx -> fn(ctx, "ui/open_goal")))
+                .then(Commands.literal("world").executes(ctx -> fn(ctx, "ui/open_world")))
                 .then(Commands.literal("rules").executes(ctx -> fn(ctx, "ui/open_rules")))
                 .then(Commands.literal("stats").executes(ctx -> fn(ctx, "stats/print")))
                 .then(Commands.literal("chat").executes(ctx -> fn(ctx, "menu/show")))
