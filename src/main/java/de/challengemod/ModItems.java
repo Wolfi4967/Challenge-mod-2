@@ -18,6 +18,8 @@ final class ModItems {
     static final Item SEAL_DEEP = register("seal_deep", Item::new, new Item.Properties().stacksTo(1));
     static final Item SEAL_VOID = register("seal_void", Item::new, new Item.Properties().stacksTo(1));
     static final Item SEAL_SOUL = register("seal_soul", Item::new, new Item.Properties().stacksTo(1));
+    /** Die Klinge des Klingenmeisters: Nur wer sie in der Hand hält, kann ihn in der letzten Phase verletzen. */
+    static final Item MASTER_BLADE = register("master_blade", Item::new, new Item.Properties().stacksTo(1));
     static final Item[] SEALS = {SEAL_EMBER, SEAL_DEEP, SEAL_VOID, SEAL_SOUL};
     static final String[] SEAL_NAMES = {"Siegel der Glut", "Siegel der Tiefe", "Siegel der Leere", "Siegel der Seele"};
     static final String[] SEAL_IDS = {"seal_ember", "seal_deep", "seal_void", "seal_soul"};

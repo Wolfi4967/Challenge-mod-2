@@ -155,7 +155,8 @@ public class ChallengeMod implements ModInitializer {
         if (player == null) {
             return 0;
         }
-        return runAsServer(ctx.getSource().getServer(), "dialog clear " + player.getStringUUID());
+        // "dialog clear <UUID>" lehnt das Spiel ab (eine UUID gilt als „Objekt“, nicht als Spieler) – deshalb über "execute as"
+        return runAsServer(ctx.getSource().getServer(), "execute as " + player.getStringUUID() + " run dialog clear @s");
     }
 
     /** /challenge apply rules|chaos|goal <zahlen …> – Werte kommen aus den Einstellungs-Fenstern. */

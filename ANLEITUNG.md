@@ -72,7 +72,7 @@ Du musst dafür nichts installieren. Es sind nur **12 Dateien** – GitHub schaf
 5. **„▶ Challenge starten“** – 3, 2, 1, los!
 6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen dieselbe Mod-Datei wie du.
 
-### Ziel „Seelenwelten: Die Rissblüte“ (ab Version 1.2.0)
+### Ziel „Seelenwelten: Der Klingenmeister“ (ab Version 1.2.0)
 
 Kein Zusatz-Datenpaket mehr nötig – `Seelenwelten-Dimensionen.zip` könnt ihr weglassen.
 
@@ -80,8 +80,9 @@ Kein Zusatz-Datenpaket mehr nötig – `Seelenwelten-Dimensionen.zip` könnt ihr
 („Neuer Versuch in dieser Welt“) beginnt 100.000 Blöcke weiter östlich in unberührter Oberwelt, der Nether dazu
 liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
 
-1. Auf Seite 3 „Ziel & Leben“ das Ziel **Seelenwelten** wählen und starten.
-2. Einer bleibt in der **Oberwelt**, der andere landet im **Nether** (wer, entscheidet der Zufall).
+1. Auf Seite 3 „Ziel & Leben“ das Ziel **Seelenwelten** wählen. Darunter stellt ihr ein, **wer wo lebt**
+   (Zufall, „Ich in der Oberwelt“ oder „Ich im Nether“ – es gilt für den, der auf Speichern klickt). Dann starten.
+2. Einer bleibt in der **Oberwelt**, der andere landet im **Nether**.
    Normale Netherportale sind gesperrt.
 3. In jeder Welt steht ein **versiegeltes Tor**. Das Oberwelt-Tor steht rund 100 Blöcke östlich vom Start,
    das Nether-Tor direkt vor dem Nether-Spieler. Die Koordinaten stehen im Chat.
@@ -98,17 +99,29 @@ liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
    Schleichen + Rechtsklick zeigt den Partner, euer Tor und wie viele Siegel schon sitzen.
 6. Ein Siegel setzt ihr mit **Rechtsklick in der Nähe eures Tors** ein.
 7. Sitzen alle acht Siegel, öffnen sich beide Tore. Stellt euch **gleichzeitig** in euer Tor und bleibt 3 Sekunden stehen.
-8. Ihr landet auf der Insel **„Der Riss“**. Geht zur Blüte in der Mitte.
-9. **Die Rissblüte** – eine riesige Knospe in der Blüte, umkreist von einem Kristallkranz:
-   - **Geschlossen** ist sie unverwundbar und greift an. **Offen** ist sie verwundbar.
-   - **Weiß (Lichtblüte):** nur der Nether-Spieler kann sie verletzen. **Schwarz (Schattenblüte):** nur der Oberwelt-Spieler.
-     Die Farbe wechselt bei jedem Schließen. Der andere wehrt solange die Schwebe-Geschosse ab (man kann sie wegschlagen).
-   - **Risse:** leuchten hell auf und brechen zwei Sekunden später aus – runter von den hellen Linien.
-   - **Druckwellen:** lila Ringe laufen von der Mitte nach außen – drüberspringen.
-   - **Splitterregen:** Kristalle fallen dorthin, wo ihr steht – in Bewegung bleiben.
-   - **Sog:** zieht euch zur Blüte, danach entlädt sie sich – weglaufen.
-   - Unter halbem Leben kommen zwei Angriffe pro Runde und Endermilben aus den Rissen.
-   - Bei den letzten 10 % Leben müsst ihr sie **beide innerhalb von 5 Sekunden** treffen.
+8. Ihr landet auf der Insel **„Der Riss“** (End-Himmel, kein Drache). Geht zur Blüte in der Mitte.
+9. **Der Klingenmeister** – ein gepanzerter Schwertkämpfer, doppelt so groß wie ihr. **Nehmt beide einen Schild mit.**
+   - **Das Duell:** Er fordert immer einen von euch heraus (leuchtender Kreis). Nur der Duellant kann ihn treffen –
+     und nur, nachdem er richtig auf einen Schlag geantwortet hat:
+
+     | Ansage | Antwort |
+     |---|---|
+     | **HIEB** (er springt hoch) | mit dem Schild blocken |
+     | **FEGER** (Ring am Boden) | springen |
+     | **STICH** (Lichtlinie auf dich) | zur Seite gehen |
+     | **WIRBEL** (er dreht sich) | Abstand nehmen |
+
+     Nach einer richtigen Antwort ist er kurz aus dem Gleichgewicht (er leuchtet) – dann zuschlagen.
+   - **Der andere Spieler** bleibt außerhalb des Kreises und schlägt die **Schattenklingen** weg (schwebende Schwerter,
+     die auf den Duellanten zufliegen). Nach drei Schlagwechseln wechselt der Gegner.
+   - **Verbeugung:** Vor jedem Duell wartet er kurz. Wer schleicht, verbeugt sich und bekommt 30 Sekunden Schutz.
+     Wer ihn in dem Moment schlägt, macht ihn wütend (schnellere Schläge).
+   - **Zwei Klingen** (unter zwei Dritteln Leben): schnellere Schläge, immer zwei hintereinander, mehr Schattenklingen.
+   - **Entwaffnet** (unter einem Drittel): Sein Schwert steckt in der Insel. Hebt es auf – nur mit der **Klinge des
+     Meisters** in der Hand kann man ihn verletzen. Er jagt den Träger und holt sie sich zurück, wenn er ihn erwischt.
+     Mit Q könnt ihr sie euch zuwerfen. Wer damit vom Platz in der Mitte flieht, verliert sie.
+   - **Finale** (letzte 10 %): Einer blockt seinen HIEB mit dem Schild, dann hat der andere 5 Sekunden für den Schlag
+     mit der Klinge.
 
 **Zum Ausprobieren** (während die Challenge mit diesem Ziel läuft):
 
