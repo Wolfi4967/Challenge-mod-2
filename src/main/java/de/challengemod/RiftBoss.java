@@ -2,78 +2,79 @@ package de.challengemod;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Der Bosskampf auf der Insel: „Der Klingenmeister“ – ein gepanzerter Schwertkämpfer, doppelt so groß wie die Spieler.
+ * Der Bosskampf auf der Insel: „Der Ronin“ – ein Samurai mit eigener Skin-Textur und zwei eigenen Katanas.
+ * Technisch ist er eine „Mannequin“-Figur (Spielermodell ohne eigene KI); Bewegung und Angriffe steuert dieser Code.
  *
- * Phase 1 und 2 – das Duell: Er fordert immer EINEN Spieler heraus (Kreis um ihn). Nur der Duellant kann ihn verletzen,
- *   und nur, nachdem er richtig auf einen Schlag geantwortet hat:
- *     HIEB = mit dem Schild blocken, FEGER = springen, STICH = zur Seite gehen, WIRBEL = Abstand nehmen.
- *   Der andere Spieler hält die Schattenklingen fern, die auf den Duellanten zufliegen. Nach drei Schlagwechseln
- *   wechselt der Gegner. Ab Phase 2 (zwei Schwerter) kommen die Schläge schneller und als Zweierfolge.
- * Phase 3 – entwaffnet: Sein Schwert steckt in der Insel. Nur wer es in der Hand hält, kann ihn verletzen. Er jagt den
- *   Träger und holt es sich zurück, wenn er ihn erwischt. Man kann es sich zuwerfen.
- * Finale (letzte 10 %): Einer blockt seinen Hieb mit dem Schild, dann hat der andere 5 Sekunden für den Schlag mit dem Schwert.
- *
- * Der Boss selbst hat keine eigene KI: Bewegung, Schläge und Treffer steuert dieser Code über normale Befehle.
+ * Zu zweit: Er pariert immer die Schläge EINES Spielers (Oberwelt- oder Nether-Spieler), nur der andere trifft.
+ *   Das wechselt alle paar Sekunden. Allein kann man ihn immer treffen.
+ * Phase 1 (bis 2/3):  Doppelhiebe im Nahkampf, Sturmschnitt (Lichtlinie, dann rast er hindurch), wehrt Pfeile ab.
+ * Phase 2 (bis 1/3):  dazu Klingenwurf (das dunkle Katana fliegt im Bogen und kehrt zurück), Schattenschritt, Wirbel.
+ * Phase 3:            brennende Klingen, Trugbilder, Tausend Schnitte.
+ * Finale (10 %):      Letzter Schnitt – beide müssen ihn treffen, während er ausholt.
  */
 final class RiftBoss {
-    static final String NAME = "Der Klingenmeister";
-    private static final float MAX_HP = 320.0F;
+    static final String NAME = "Der Ronin";
+    private static final float MAX_HP = 360.0F;
     private static final String BOSS = "@e[tag=riss_boss,limit=1]";
-    private static final String BLADE = ChallengeMod.NS + ":master_blade";
+    private static final String NS = ChallengeMod.NS;
+    private static final String PROFILE = "profile:{texture:\"" + NS + ":entity/ronin\",model:\"wide\"},hide_description:1b";
     private static final Random RANDOM = new Random();
-    private static final int BOW = 0, IDLE = 1, TELEGRAPH = 2, STAGGER = 3;
-    private static final int HIEB = 0, FEGER = 1, STICH = 2, WIRBEL = 3;
-    private static final String[] ATTACK_NAME = {"HIEB", "FEGER", "STICH", "WIRBEL"};
-    private static final String[] ATTACK_COLOR = {"red", "yellow", "aqua", "light_purple"};
-    private static final String[] ATTACK_HINT = {"Schild hoch!", "Springen!", "Zur Seite!", "Abstand nehmen!"};
-    private static final String[] ATTACK_SOUND = {"minecraft:block.anvil.place", "minecraft:entity.player.attack.sweep",
-            "minecraft:item.trident.throw", "minecraft:entity.breeze.wind_burst"};
-    private static final int[] ATTACK_DAMAGE = {8, 6, 8, 7};
-    private static final String[] TAUNTS = {"Zu langsam.", "Das nennst du Verteidigung?", "Mein Lehrling war mit sechs Jahren schneller.",
-            "Noch einmal. Diesmal mit Würde.", "Du kämpfst wie ein Schaf.", "Ich habe Zeit. Du auch?"};
+    private static final int CHASE = 0, SLASH = 1, RECOVER = 2, AIM = 3, DASH = 4, THROW = 5, WHIRL = 6, CUTS = 7, FINAL = 8;
+    private static final String[] TAUNTS = {"Zu langsam.", "Deine Deckung ist offen.", "Ein Schnitt genügt.", "Du zögerst.",
+            "Kämpft ihr immer so?", "Steh auf."};
 
+    /** Die Figur selbst (wird beim Laden über ihre Markierung gefunden) – nur für die Schlag-Animation. */
+    private static LivingEntity body;
     private static long clock;
-    private static int stage;
+    private static int state;
     private static int timer;
-    private static int attack = -1;
-    private static int comboLeft;
-    private static boolean comboOk;
-    private static int exchanges;
-    private static String duelist = "";
-    private static boolean bowed;
-    private static boolean angry;
+    private static int special;       // Ticks bis zum nächsten Spezialangriff
     private static boolean placed;
     private static double bx;
+    private static double by;
     private static double bz;
+    private static double yaw;
+    private static String target = "";
+    private static int openRole = 1;  // welche Rolle ihn gerade treffen kann (1 = Oberwelt, 2 = Nether)
+    private static int guardTimer;
     private static double lineX;
     private static double lineZ;
-    private static int bladeTimer;
-    private static boolean disarmed;
-    private static boolean disarmAnnounced;
-    private static double[] swordSpot;
-    private static int swordLost;
-    private static int outside;
-    private static int catchCooldown;
+    private static double lineLength;
+    private static final Set<String> struck = new HashSet<>();
+    private static final List<double[]> cuts = new ArrayList<>();    // Punkt x, z und Richtung x, z
+    private static final List<double[]> clones = new ArrayList<>();  // Nummer, x, z, Pause
+    private static int cloneTimer;
+    private static int cloneId;
+    private static int announced = 1; // höchste angesagte Phase
     private static boolean finale;
     private static boolean finaleAnnounced;
-    private static int openWindow;
+    private static final long[] lastHit = {-1000, -1000, -1000};
     private static boolean finishNow;
     private static boolean killing;
+    private static boolean has1;
+    private static boolean has2;
     private static int grace;
     private static float lastHp = MAX_HP;
     private static final Map<String, Long> hinted = new HashMap<>();
-    private static final Map<String, Long> bladeHit = new HashMap<>();
     private static boolean errorLogged;
     private static boolean barShown;
 
@@ -82,57 +83,45 @@ final class RiftBoss {
 
     static void reset() {
         clock = 0;
-        stage = BOW;
+        state = CHASE;
         timer = 0;
-        attack = -1;
-        comboLeft = 1;
-        comboOk = true;
-        exchanges = 0;
-        duelist = "";
-        bowed = false;
-        angry = false;
+        special = 160;
         placed = false;
-        bladeTimer = 60;
-        disarmed = false;
-        disarmAnnounced = false;
-        swordSpot = null;
-        swordLost = 0;
-        outside = 0;
-        catchCooldown = 0;
+        target = "";
+        openRole = 1;
+        guardTimer = 0;
+        struck.clear();
+        cuts.clear();
+        clones.clear();
+        cloneTimer = 100;
+        announced = 1;
         finale = false;
         finaleAnnounced = false;
-        openWindow = 0;
+        lastHit[1] = -1000;
+        lastHit[2] = -1000;
         finishNow = false;
         killing = false;
         grace = 0;
         lastHp = MAX_HP;
         hinted.clear();
-        bladeHit.clear();
     }
 
     /** Vor dem Betreten der Insel und beim Zurücksetzen: Reste eines früheren Kampfes wegräumen. */
     static void prepare(MinecraftServer server) {
         reset();
         killing = true;
-        Rift.cmd(server, "kill @e[tag=riss_boss]");
-        Rift.cmd(server, "kill @e[tag=riss_add]");
-        Rift.cmd(server, "kill @e[tag=riss_halo]");
-        Rift.cmd(server, "kill @e[tag=riss_shard]");
-        Rift.cmd(server, "kill @e[tag=riss_sword]");
-        removeBlades(server);
+        for (String tag : new String[] {"riss_boss", "riss_add", "riss_halo", "riss_shard", "riss_sword", "riss_clone", "riss_fly"}) {
+            Rift.cmd(server, "kill @e[tag=" + tag + "]");
+        }
         if (Rift.findLevel(server, Rift.ARENA) != null) {
             // ältere Versionen haben in dieser Dimension versehentlich einen Enderdrachen erzeugt
             Rift.cmd(server, "execute in " + Rift.ARENA + " run kill @e[type=minecraft:ender_dragon,distance=0..]");
             Rift.cmd(server, "execute in " + Rift.ARENA + " run kill @e[type=minecraft:end_crystal,distance=0..]");
         }
         killing = false;
+        body = null;
         Rift.cmd(server, "bossbar remove challenge:riss");
         barShown = false;
-    }
-
-    private static void removeBlades(MinecraftServer server) {
-        Rift.cmd(server, "clear @a " + BLADE);
-        Rift.cmd(server, "kill @e[type=minecraft:item,nbt={Item:{id:\"" + BLADE + "\"}}]");
     }
 
     /** Ist die Challenge vorbei (verloren, abgebrochen), verschwindet die Bossleiste wieder. */
@@ -143,9 +132,19 @@ final class RiftBoss {
         }
     }
 
-    /** Wird nicht mehr gebraucht (der Klingenmeister benutzt die Risse nicht), bleibt aber für Rift.enter erhalten. */
     static void resetCracks(MinecraftServer server, int cx, int top, int cz) {
         RiftIsland.ensure(cx, top, cz);
+    }
+
+    /** Fabric-Ereignis „Objekt geladen“: merkt sich die Boss-Figur. */
+    static void onEntityLoad(Entity entity, ServerLevel level) {
+        try {
+            if (entity instanceof LivingEntity living && entity.entityTags().contains("riss_boss")) {
+                body = living;
+            }
+        } catch (Throwable ignored) {
+            // dann eben ohne Schlag-Animation
+        }
     }
 
     // ------------------------------------------------------------------ Helfer
@@ -182,36 +181,71 @@ final class RiftBoss {
         return null;
     }
 
+    private static ServerPlayer nearest(List<ServerPlayer> players, double x, double z) {
+        ServerPlayer best = players.get(0);
+        for (ServerPlayer player : players) {
+            if (Math.hypot(player.getX() - x, player.getZ() - z) < Math.hypot(best.getX() - x, best.getZ() - z)) {
+                best = player;
+            }
+        }
+        return best;
+    }
+
     private static double distance(ServerPlayer player) {
         return Math.hypot(player.getX() - bx, player.getZ() - bz);
-    }
-
-    private static boolean holdsBlade(ServerPlayer player) {
-        return player.getMainHandItem().is(ModItems.MASTER_BLADE);
-    }
-
-    private static void titleTo(MinecraftServer server, String name, String title, String color, String subtitle) {
-        Rift.cmd(server, "title " + name + " times 0 25 6");
-        Rift.cmd(server, "title " + name + " subtitle {text:\"" + subtitle + "\",color:\"gray\"}");
-        Rift.cmd(server, "title " + name + " title {text:\"" + title + "\",color:\"" + color + "\",bold:true}");
     }
 
     private static void say(MinecraftServer server, String text) {
         Rift.broadcast(server, "§8<§c" + NAME + "§8> §f" + text);
     }
 
-    private static void glow(MinecraftServer server, boolean on) {
-        Rift.cmd(server, on ? "effect give " + BOSS + " minecraft:glowing infinite 0 true" : "effect clear " + BOSS + " minecraft:glowing");
+    private static void swing(boolean mainHand) {
+        try {
+            if (body != null && body.isAlive()) {
+                body.swing(mainHand ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND, SwingAnimation.DEFAULT, true);
+            }
+        } catch (Throwable ignored) {
+            // nur Optik
+        }
     }
 
-    /** Stellt den Boss an seinen Platz und lässt ihn einen Spieler ansehen (oder sich drehen). */
-    private static void pose(MinecraftServer server, double y, String lookAt, double spinYaw) {
-        String at = fmt(bx) + " " + fmt(y) + " " + fmt(bz);
-        if (lookAt != null) {
-            Rift.cmd(server, in(server) + "tp " + BOSS + " " + at + " facing entity " + lookAt);
-        } else {
-            Rift.cmd(server, in(server) + "tp " + BOSS + " " + at + " " + fmt(spinYaw) + " 0");
+    private static void pose(MinecraftServer server, boolean crouch) {
+        Rift.cmd(server, "data merge entity " + BOSS + " {pose:\"" + (crouch ? "crouching" : "standing") + "\"}");
+    }
+
+    private static void face(double x, double z) {
+        if (Math.abs(x - bx) + Math.abs(z - bz) > 0.01) {
+            yaw = -Math.toDegrees(Math.atan2(x - bx, z - bz));
         }
+    }
+
+    /** Schritt in eine Richtung; er bleibt auf der Insel und folgt dem Boden. */
+    private static void move(ServerLevel level, int cx, int top, int cz, double dx, double dz) {
+        bx += dx;
+        bz += dz;
+        double fromCenter = Math.hypot(bx - (cx + 0.5), bz - (cz + 0.5));
+        if (fromCenter > 28) {
+            bx = cx + 0.5 + (bx - (cx + 0.5)) / fromCenter * 28;
+            bz = cz + 0.5 + (bz - (cz + 0.5)) / fromCenter * 28;
+        }
+        by = ground(level, top, bx, bz);
+    }
+
+    private static double ground(ServerLevel level, int top, double x, double z) {
+        if (level == null) {
+            return top;
+        }
+        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) Math.floor(x), (int) Math.floor(z));
+        return y < top - 4 || y > top + 6 ? top : y;
+    }
+
+    /** Treffer auf einen Spieler. Blockbare Schläge hält ein erhobener Schild auf. */
+    private static void hurt(MinecraftServer server, ServerPlayer player, int amount, boolean blockable) {
+        if (blockable && player.isBlocking()) {
+            Rift.cmd(server, "execute at " + player.getScoreboardName() + " run playsound minecraft:item.shield.block master @a ~ ~ ~ 1 1");
+            return;
+        }
+        Rift.cmd(server, "damage " + player.getScoreboardName() + " " + amount + " minecraft:mob_attack");
     }
 
     // ------------------------------------------------------------------ Tick
@@ -222,17 +256,21 @@ final class RiftBoss {
             int top = Rift.score(server, "#arena_y");
             int cz = Rift.score(server, "#arena_z");
             List<ServerPlayer> players = new ArrayList<>();
+            boolean one = false;
+            boolean two = false;
             for (ServerPlayer player : Rift.rolePlayers(server)) {
                 if (inArena(server, player, cx, cz)) {
                     players.add(player);
+                    one |= Rift.role(server, player) == 1;
+                    two |= Rift.role(server, player) == 2;
                 }
             }
+            has1 = one;
+            has2 = two;
             if (phase == 2) {
                 for (ServerPlayer player : players) {
-                    double dx = player.getX() - cx;
-                    double dz = player.getZ() - cz;
-                    if (dx * dx + dz * dz < 16 * 16) {
-                        start(server, players, cx, top, cz);
+                    if (Math.hypot(player.getX() - cx, player.getZ() - cz) < 16) {
+                        start(server, cx, top, cz);
                         return;
                     }
                 }
@@ -247,55 +285,72 @@ final class RiftBoss {
         }
     }
 
-    private static void start(MinecraftServer server, List<ServerPlayer> players, int cx, int top, int cz) {
+    private static void start(MinecraftServer server, int cx, int top, int cz) {
         reset();
         bx = cx + 0.5;
         bz = cz + 0.5;
+        by = top;
         placed = true;
+        Rift.cmd(server, "team add riss_a");
+        Rift.cmd(server, "team modify riss_a color aqua");
+        Rift.cmd(server, "team add riss_b");
+        Rift.cmd(server, "team modify riss_b color red");
         Rift.cmd(server, "bossbar add challenge:riss \"" + NAME + "\"");
         Rift.cmd(server, "bossbar set challenge:riss max " + (int) MAX_HP);
-        Rift.cmd(server, "bossbar set challenge:riss style notched_10");
+        Rift.cmd(server, "bossbar set challenge:riss style notched_6");
         Rift.cmd(server, "bossbar set challenge:riss color red");
         Rift.cmd(server, "bossbar set challenge:riss players @a");
         barShown = true;
-        spawnBoss(server, top, MAX_HP);
+        spawnBoss(server, MAX_HP);
         Rift.set(server, "#rift_phase", 3);
-        Rift.title(server, "DER KLINGENMEISTER", "red", "Er fordert euch zum Duell");
-        Rift.sound(server, "minecraft:entity.wither.spawn", 0.9);
-        Rift.broadcast(server, "§c✦ Der Klingenmeister §7duelliert immer einen von euch. Nur der Duellant kann ihn treffen – und nur, "
-                + "wenn er richtig antwortet: §cHIEB§7 = Schild hoch, §eFEGER§7 = springen, §bSTICH§7 = zur Seite, §dWIRBEL§7 = Abstand. "
-                + "Der andere schlägt die Schattenklingen weg. §fIhr braucht beide einen Schild.");
-        startDuel(server, players, players.isEmpty() ? "" : players.get(0).getScoreboardName());
+        Rift.title(server, "DER RONIN", "red", "Zwei Klingen. Ein Meister ohne Herr.");
+        Rift.sound(server, "minecraft:entity.wither.spawn", 1.2);
+        Rift.broadcast(server, "§c✦ Der Ronin §7pariert immer die Schläge von einem von euch – nur der andere trifft. "
+                + "§bLeuchtet er blau§7, trifft der Oberwelt-Spieler. §cLeuchtet er rot§7, trifft der Nether-Spieler. "
+                + "Ein Schild hält seine Hiebe auf. Pfeile wehrt er ab.");
+        guard(server, RANDOM.nextBoolean() ? 1 : 2);
     }
 
-    private static void spawnBoss(MinecraftServer server, int top, float hp) {
-        Rift.cmd(server, in(server) + "summon minecraft:wither_skeleton " + fmt(bx) + " " + top + " " + fmt(bz)
-                + " {Tags:[\"riss_boss\"],PersistenceRequired:1b,NoAI:1b,Silent:1b}");
-        Rift.cmd(server, "data merge entity " + BOSS + " {CustomName:\"" + NAME + "\",CustomNameVisible:1b}");
-        Rift.cmd(server, "attribute " + BOSS + " minecraft:scale base set 2");
+    private static void spawnBoss(MinecraftServer server, float hp) {
+        Rift.cmd(server, in(server) + "summon minecraft:mannequin " + fmt(bx) + " " + fmt(by) + " " + fmt(bz)
+                + " {Tags:[\"riss_boss\"]," + PROFILE + ",CustomName:\"" + NAME + "\",CustomNameVisible:1b}");
+        Rift.cmd(server, "attribute " + BOSS + " minecraft:scale base set 1.5");
         Rift.cmd(server, "attribute " + BOSS + " minecraft:max_health base set " + (int) MAX_HP);
         Rift.cmd(server, "attribute " + BOSS + " minecraft:knockback_resistance base set 1");
         Rift.cmd(server, "data merge entity " + BOSS + " {Health:" + hp + "f}");
-        Rift.cmd(server, "item replace entity " + BOSS + " armor.head with minecraft:netherite_helmet");
-        Rift.cmd(server, "item replace entity " + BOSS + " armor.chest with minecraft:netherite_chestplate");
-        Rift.cmd(server, "item replace entity " + BOSS + " armor.legs with minecraft:netherite_leggings");
-        Rift.cmd(server, "item replace entity " + BOSS + " armor.feet with minecraft:netherite_boots");
-        equip(server);
+        Rift.cmd(server, "effect give " + BOSS + " minecraft:glowing infinite 0 true");
+        equip(server, true);
+        Rift.cmd(server, "team join " + (openRole == 1 ? "riss_a" : "riss_b") + " @e[tag=riss_boss]");
         grace = 60;
     }
 
-    /** Ein Schwert (Phase 1), zwei Schwerter (Phase 2) oder leere Hände (entwaffnet). */
-    private static void equip(MinecraftServer server) {
-        boolean two = lastHp < MAX_HP * 0.66F;
-        Rift.cmd(server, "item replace entity " + BOSS + " weapon.mainhand with " + (disarmed ? "minecraft:air" : "minecraft:netherite_sword"));
-        Rift.cmd(server, "item replace entity " + BOSS + " weapon.offhand with " + (!disarmed && two ? "minecraft:netherite_sword" : "minecraft:air"));
+    /** Die beiden Katanas; ab Phase 3 brennen sie. */
+    private static void equip(MinecraftServer server, boolean both) {
+        boolean burning = lastHp < MAX_HP * 0.33F;
+        Rift.cmd(server, "item replace entity " + BOSS + " weapon.mainhand with " + NS + (burning ? ":katana_flame" : ":katana_light"));
+        Rift.cmd(server, "item replace entity " + BOSS + " weapon.offhand with " + (both ? NS + (burning ? ":katana_soul" : ":katana_dark") : "minecraft:air"));
+    }
+
+    /** Wer ihn treffen kann, wechselt: blau = Oberwelt-Spieler, rot = Nether-Spieler. */
+    private static void guard(MinecraftServer server, int role) {
+        openRole = role;
+        guardTimer = 150 + RANDOM.nextInt(60);
+        Rift.cmd(server, "team join " + (role == 1 ? "riss_a" : "riss_b") + " @e[tag=riss_boss]");
+        Rift.cmd(server, "bossbar set challenge:riss color " + (role == 1 ? "blue" : "red"));
+        Rift.cmd(server, "bossbar set challenge:riss name \"" + NAME + (role == 1 ? " – offen für den Oberwelt-Spieler" : " – offen für den Nether-Spieler") + "\"");
+        Rift.sound(server, "minecraft:item.armor.equip_netherite", 1.4);
+    }
+
+    private static boolean canHit(int role) {
+        return state == THROW || !(has1 && has2) || role == openRole;
     }
 
     private static void fight(MinecraftServer server, List<ServerPlayer> players, int cx, int top, int cz) {
+        ServerLevel level = Rift.findLevel(server, dimension(server));
         if (!placed) {
-            // nach einem Server-Neustart mitten im Kampf
-            bx = cx + 0.5;
+            bx = cx + 0.5; // nach einem Server-Neustart mitten im Kampf
             bz = cz + 0.5;
+            by = top;
             placed = true;
         }
         if (finishNow) {
@@ -309,438 +364,357 @@ final class RiftBoss {
             Rift.cmd(server, "execute store result score #boss_n sb if entity @e[tag=riss_boss]");
             if (Rift.score(server, "#boss_n") == 0) {
                 if (grace == 0) {
-                    spawnBoss(server, top, Math.max(lastHp, MAX_HP * 0.1F)); // verschwunden: mit dem letzten Stand zurückholen
+                    spawnBoss(server, Math.max(lastHp, MAX_HP * 0.1F)); // verschwunden: mit dem letzten Stand zurückholen
                 }
             } else {
                 Rift.cmd(server, "execute store result score #boss_hp sb run data get entity " + BOSS + " Health");
                 Rift.cmd(server, "execute store result bossbar challenge:riss value run data get entity " + BOSS + " Health");
-                float before = lastHp;
                 lastHp = Math.max(1, Rift.score(server, "#boss_hp"));
-                if (before >= MAX_HP * 0.66F && lastHp < MAX_HP * 0.66F && !disarmed) {
-                    equip(server);
-                    Rift.title(server, "ZWEI KLINGEN", "red", "Jetzt kommen die Schläge schneller und zu zweit");
-                    Rift.sound(server, "minecraft:item.armor.equip_netherite", 0.6);
-                    say(server, "Genug gespielt.");
-                }
             }
             Rift.cmd(server, "bossbar set challenge:riss players @a");
         }
         if (players.isEmpty()) {
             return;
         }
-        if (finale) {
-            finaleTick(server, players, cx, top, cz);
-        } else if (disarmed) {
-            disarmTick(server, players, cx, top, cz);
-        } else {
-            duelTick(server, players, top);
-        }
-    }
-
-    // ------------------------------------------------------------------ Phase 1 und 2: das Duell
-    private static void startDuel(MinecraftServer server, List<ServerPlayer> players, String next) {
-        duelist = next;
-        exchanges = 0;
-        stage = BOW;
-        timer = 60;
-        bowed = false;
-        angry = false;
-        comboOk = true;
-        glow(server, false);
-        if (next.isEmpty()) {
-            return;
-        }
-        titleTo(server, next, "DUELL", "red", "Schleichen = verbeugen. Nur du kannst ihn treffen");
-        for (ServerPlayer other : players) {
-            if (!other.getScoreboardName().equals(next)) {
-                titleTo(server, other.getScoreboardName(), "WACHE", "light_purple", "Schlag die Schattenklingen weg, die auf " + next + " zufliegen");
-            }
-        }
-        Rift.sound(server, "minecraft:block.bell.use", 0.7);
-    }
-
-    private static String otherThan(List<ServerPlayer> players, String name) {
-        for (ServerPlayer player : players) {
-            if (!player.getScoreboardName().equals(name)) {
-                return player.getScoreboardName();
-            }
-        }
-        return players.get(0).getScoreboardName();
-    }
-
-    private static void duelTick(MinecraftServer server, List<ServerPlayer> players, int top) {
-        ServerPlayer d = find(players, duelist);
-        if (d == null) {
-            startDuel(server, players, players.get(0).getScoreboardName());
-            return;
-        }
-        boolean two = lastHp < MAX_HP * 0.66F;
-        String in = in(server);
-        // der Duellkreis, und wer nicht dran ist, bleibt draußen
-        if (clock % 4 == 0) {
-            for (int k = 0; k < 20; k++) {
-                double a = 2 * Math.PI * k / 20 + clock * 0.02;
-                Rift.cmd(server, in + "particle minecraft:end_rod " + fmt(bx + 7 * Math.cos(a)) + " " + (top + 0.3) + " "
-                        + fmt(bz + 7 * Math.sin(a)) + " 0 0 0 0 1 force");
-            }
-        }
-        for (ServerPlayer other : players) {
-            if (other != d && distance(other) < 6.3 && distance(other) > 0.3) {
-                double dist = distance(other);
-                fling(other, (other.getX() - bx) / dist * 0.7, 0.3, (other.getZ() - bz) / dist * 0.7);
-                hint(server, other, "Das ist nicht dein Duell. Halte die Schattenklingen fern!");
-            }
-        }
-        blades(server, d, top, two);
-
-        if (stage == BOW) {
-            pose(server, top, duelist, 0);
-            if (!bowed && d.isShiftKeyDown()) {
-                bowed = true;
-                Rift.cmd(server, "effect give " + duelist + " minecraft:resistance 30 0 true");
-                say(server, "Manieren. Selten geworden.");
-                d.sendSystemMessage(net.minecraft.network.chat.Component.literal("§7Du hast dich verbeugt: 30 Sekunden Schutz."));
-            }
-            if (--timer <= 0) {
-                stage = IDLE;
-                timer = 30;
-                comboLeft = two ? 2 : 1;
-                comboOk = true;
-            }
-        } else if (stage == IDLE) {
-            pose(server, top, duelist, 0);
-            if (--timer <= 0) {
-                beginTelegraph(server, d, two);
-            }
-        } else if (stage == TELEGRAPH) {
-            telegraph(server, d, top);
-            if (--timer <= 0) {
-                resolve(server, players, d, top, two);
-            }
-        } else {
-            pose(server, top, duelist, 0);
-            if (clock % 5 == 0) {
-                Rift.cmd(server, in + "particle minecraft:crit " + fmt(bx) + " " + (top + 2.5) + " " + fmt(bz) + " 0.6 1 0.6 0.2 12 force");
-            }
-            if (--timer <= 0) {
-                glow(server, false);
-                endExchange(server, players, two);
-            }
-        }
-    }
-
-    private static void beginTelegraph(MinecraftServer server, ServerPlayer d, boolean two) {
-        int next = RANDOM.nextInt(4);
-        if (next == attack) {
-            next = (next + 1 + RANDOM.nextInt(3)) % 4;
-        }
-        attack = next;
-        stage = TELEGRAPH;
-        timer = (int) ((two ? 20 : 28) * (angry ? 0.75 : 1.0));
-        double dist = Math.max(0.01, distance(d));
-        lineX = (d.getX() - bx) / dist;
-        lineZ = (d.getZ() - bz) / dist;
-        titleTo(server, duelist, ATTACK_NAME[attack], ATTACK_COLOR[attack], two ? "" : ATTACK_HINT[attack]);
-        Rift.sound(server, ATTACK_SOUND[attack], attack == HIEB ? 1.6 : 0.8);
-    }
-
-    /** Die sichtbare Ankündigung des Schlags. */
-    private static void telegraph(MinecraftServer server, ServerPlayer d, int top) {
-        String in = in(server);
-        if (attack == HIEB) {
-            pose(server, top + 1.5, duelist, 0); // er springt hoch und holt aus
-            if (clock % 2 == 0) {
-                Rift.cmd(server, in + "particle minecraft:crit " + fmt(bx) + " " + (top + 6) + " " + fmt(bz) + " 0.4 0.4 0.4 0.1 8 force");
-            }
-        } else if (attack == FEGER) {
-            pose(server, top, duelist, 0);
-            if (clock % 2 == 0) {
-                for (int k = 0; k < 10; k++) {
-                    double a = 2 * Math.PI * k / 10 + clock * 0.3;
-                    Rift.cmd(server, in + "particle minecraft:sweep_attack " + fmt(bx + 3.5 * Math.cos(a)) + " " + (top + 0.3) + " "
-                            + fmt(bz + 3.5 * Math.sin(a)) + " 0 0 0 0 1 force");
-                }
-            }
-        } else if (attack == STICH) {
-            pose(server, top, duelist, 0);
-            if (clock % 2 == 0) {
-                for (int k = 1; k <= 10; k++) {
-                    Rift.cmd(server, in + "particle minecraft:end_rod " + fmt(bx + lineX * k) + " " + (top + 1.3) + " "
-                            + fmt(bz + lineZ * k) + " 0 0 0 0 1 force");
-                }
-            }
-        } else {
-            pose(server, top, null, (clock * 45.0) % 360.0); // er dreht sich
-            if (clock % 2 == 0) {
-                for (int k = 0; k < 12; k++) {
-                    double a = 2 * Math.PI * k / 12 - clock * 0.4;
-                    Rift.cmd(server, in + "particle minecraft:cloud " + fmt(bx + 4.4 * Math.cos(a)) + " " + (top + 1.0) + " "
-                            + fmt(bz + 4.4 * Math.sin(a)) + " 0 0 0 0 1 force");
-                }
-            }
-        }
-    }
-
-    /** Der Schlag trifft: Hat der Duellant richtig geantwortet? */
-    private static void resolve(MinecraftServer server, List<ServerPlayer> players, ServerPlayer d, int top, boolean two) {
-        double dx = d.getX() - bx;
-        double dz = d.getZ() - bz;
-        double dist = Math.hypot(dx, dz);
-        boolean fled = dist > 8.5; // außerhalb des Kreises zählt nicht als Antwort
-        boolean hit;
-        if (attack == HIEB) {
-            hit = !d.isBlocking();
-        } else if (attack == FEGER) {
-            hit = d.onGround();
-        } else if (attack == STICH) {
-            double along = dx * lineX + dz * lineZ;
-            hit = along > 0 && along < 10.5 && Math.abs(dx * lineZ - dz * lineX) < 1.1;
-        } else {
-            hit = dist < 4.6;
-        }
-        String in = in(server);
-        Rift.cmd(server, in + "particle minecraft:sweep_attack " + fmt(bx + lineX * 2) + " " + (top + 1.5) + " " + fmt(bz + lineZ * 2)
-                + " 1 0.5 1 0 6 force");
-        if (!hit && !fled) {
-            Rift.sound(server, attack == HIEB ? "minecraft:item.shield.block" : "minecraft:entity.experience_orb.pickup", 1.0);
-            comboLeft--;
-        } else {
-            comboOk = false;
-            comboLeft = 0;
-            if (hit && !fled) {
-                Rift.cmd(server, "damage " + duelist + " " + ATTACK_DAMAGE[attack] + " minecraft:mob_attack");
-                Rift.sound(server, "minecraft:entity.player.attack.crit", 0.7);
-                say(server, TAUNTS[RANDOM.nextInt(TAUNTS.length)]);
+        int phase = lastHp < MAX_HP * 0.33F ? 3 : lastHp < MAX_HP * 0.66F ? 2 : 1;
+        if (phase > announced) {
+            announced = phase;
+            if (phase == 2) {
+                Rift.title(server, "DER STURM", "light_purple", "Klingenwurf, Schattenschritt und Wirbel");
+                say(server, "Ihr seid besser, als ihr ausseht.");
             } else {
-                say(server, "Lauf nur. Ein Duell gewinnt man nicht von da hinten.");
+                equip(server, true);
+                Rift.title(server, "DER DÄMON", "gold", "Brennende Klingen, Trugbilder, Tausend Schnitte");
+                say(server, "Dann zeige ich euch, warum ich keinen Herrn mehr habe.");
+            }
+            Rift.sound(server, "minecraft:entity.ender_dragon.growl", 1.3);
+        }
+        if (finale) {
+            finaleTick(server, players);
+        } else {
+            if (--guardTimer <= 0 && has1 && has2) {
+                guard(server, 3 - openRole);
+            }
+            if (clock % 20 == 0 && has1 && has2 && state != THROW) {
+                for (ServerPlayer player : players) {
+                    boolean open = Rift.role(server, player) == openRole;
+                    Rift.cmd(server, "title " + player.getScoreboardName() + " actionbar {text:\""
+                            + (open ? "Du kannst ihn treffen!" : "Er pariert deine Schläge – lenk ihn ab") + "\",color:\"" + (open ? "green" : "red") + "\"}");
+                }
+            }
+            act(server, level, players, cx, top, cz, phase);
+            if (phase == 3) {
+                clones(server, level, players, cx, top, cz);
+                if (clock % 4 == 0) {
+                    Rift.cmd(server, in(server) + "particle minecraft:flame " + fmt(bx) + " " + fmt(by + 1.6) + " " + fmt(bz) + " 0.5 0.6 0.5 0.01 3 force");
+                    Rift.cmd(server, in(server) + "particle minecraft:soul_fire_flame " + fmt(bx) + " " + fmt(by + 1.6) + " " + fmt(bz) + " 0.5 0.6 0.5 0.01 3 force");
+                }
             }
         }
-        if (comboLeft > 0) {
-            stage = IDLE;
-            timer = 8;
-        } else if (comboOk) {
-            stage = STAGGER;
-            timer = two ? 50 : 60;
-            glow(server, true);
-            titleTo(server, duelist, "JETZT!", "green", "Er ist aus dem Gleichgewicht – schlag zu");
-            Rift.sound(server, "minecraft:entity.iron_golem.damage", 0.7);
-        } else {
-            endExchange(server, players, two);
-        }
+        Rift.cmd(server, in(server) + "tp " + BOSS + " " + fmt(bx) + " " + fmt(by) + " " + fmt(bz) + " " + fmt(yaw) + " 0");
     }
 
-    private static void endExchange(MinecraftServer server, List<ServerPlayer> players, boolean two) {
-        exchanges++;
-        if (exchanges >= 3) {
-            startDuel(server, players, otherThan(players, duelist));
-            return;
+    // ------------------------------------------------------------------ Angriffe
+    private static void act(MinecraftServer server, ServerLevel level, List<ServerPlayer> players, int cx, int top, int cz, int phase) {
+        ServerPlayer t = find(players, target);
+        if (t == null || (state == CHASE && clock % 100 == 0)) {
+            t = nearest(players, bx, bz);
+            target = t.getScoreboardName();
         }
-        stage = IDLE;
-        timer = 35;
-        comboLeft = two ? 2 : 1;
-        comboOk = true;
-    }
-
-    /** Schattenklingen: schwebende Schwerter, die auf den Duellanten zufliegen. Ein Treffer zerstört sie. */
-    private static void blades(MinecraftServer server, ServerPlayer d, int top, boolean two) {
+        double dx = t.getX() - bx;
+        double dz = t.getZ() - bz;
+        double dist = Math.max(0.01, Math.hypot(dx, dz));
         String in = in(server);
-        if (--bladeTimer <= 0) {
-            bladeTimer = two ? 40 : 60;
-            Rift.cmd(server, "execute store result score #adds_n sb if entity @e[tag=riss_blade]");
-            if (Rift.score(server, "#adds_n") < (two ? 5 : 3)) {
-                for (int i = 0; i < (two ? 2 : 1); i++) {
-                    double a = RANDOM.nextDouble() * Math.PI * 2;
-                    Rift.cmd(server, in + "summon minecraft:vex " + fmt(bx + 14 * Math.cos(a)) + " " + (top + 2.5) + " " + fmt(bz + 14 * Math.sin(a))
-                            + " {Tags:[\"riss_blade\",\"riss_add\"],NoAI:1b,Silent:1b,PersistenceRequired:1b,"
-                            + "equipment:{mainhand:{id:\"minecraft:netherite_sword\",count:1}}}");
+        if (state == CHASE) {
+            face(t.getX(), t.getZ());
+            if (dist > 2.6) {
+                double speed = phase == 1 ? 0.2 : 0.23;
+                move(level, cx, top, cz, dx / dist * speed, dz / dist * speed);
+            }
+            if (--special <= 0 && dist > 3.5) {
+                special = phase == 1 ? 170 : phase == 2 ? 130 : 105;
+                startSpecial(server, level, players, t, cx, top, cz, phase);
+            } else if (dist <= 2.8) {
+                state = SLASH;
+                timer = 18;
+            }
+        } else if (state == SLASH) {
+            face(t.getX(), t.getZ());
+            if (timer == 14 || timer == 6) {
+                swing(timer == 14);
+                Rift.cmd(server, in + "playsound minecraft:entity.player.attack.sweep master @a " + fmt(bx) + " " + fmt(by) + " " + fmt(bz) + " 1 " + (timer == 14 ? "0.9" : "1.2"));
+                Rift.cmd(server, in + "particle minecraft:sweep_attack " + fmt(bx + dx / dist * 1.6) + " " + fmt(by + 1.6) + " " + fmt(bz + dz / dist * 1.6) + " 0.3 0.2 0.3 0 2 force");
+                for (ServerPlayer player : players) {
+                    if (distance(player) < 3.4) {
+                        hurt(server, player, phase == 3 ? 7 : 6, true);
+                    }
                 }
-                Rift.cmd(server, "execute as @e[tag=riss_blade] run attribute @s minecraft:max_health base set 1");
-                Rift.cmd(server, "execute as @e[tag=riss_blade] run attribute @s minecraft:scale base set 1.8");
-                Rift.cmd(server, "execute as @e[tag=riss_blade] run data merge entity @s {Health:1f}");
-                Rift.cmd(server, "effect give @e[tag=riss_blade] minecraft:invisibility infinite 0 true");
-                Rift.cmd(server, "effect give @e[tag=riss_blade] minecraft:glowing infinite 0 true");
             }
-        }
-        Rift.cmd(server, "execute as @e[tag=riss_blade] at @s facing entity " + duelist + " eyes run tp @s ^ ^ ^0.19");
-        if (clock % 2 == 0) {
-            String near = "execute at " + duelist + " positioned ~ ~1.2 ~ ";
-            Rift.cmd(server, near + "if entity @e[tag=riss_blade,distance=..1.3] run damage " + duelist + " 5 minecraft:mob_attack");
-            Rift.cmd(server, near + "run kill @e[tag=riss_blade,distance=..1.3]");
-        }
-    }
-
-    // ------------------------------------------------------------------ Phase 3: entwaffnet
-    private static void spawnSword(MinecraftServer server, int cx, int top, int cz) {
-        double a = RANDOM.nextDouble() * Math.PI * 2;
-        double r = 5 + RANDOM.nextDouble() * 3;
-        swordSpot = new double[] {cx + 0.5 + r * Math.cos(a), top, cz + 0.5 + r * Math.sin(a)};
-        Rift.cmd(server, "kill @e[tag=riss_sword]");
-        Rift.cmd(server, in(server) + "summon minecraft:item_display " + fmt(swordSpot[0]) + " " + (top + 1.4) + " " + fmt(swordSpot[2])
-                + " {Tags:[\"riss_sword\"],Glowing:1b,item:{id:\"" + BLADE + "\",count:1},"
-                + "transformation:{left_rotation:[0f,0f,-0.92f,0.38f],right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[2.5f,2.5f,2.5f]},"
-                + "brightness:{sky:15,block:15}}");
-        Rift.sound(server, "minecraft:block.anvil.land", 1.4);
-    }
-
-    /** Liegt das Schwert in der Insel, kann es jeder aufheben. Geht es verloren, taucht es wieder auf. */
-    private static void swordUpkeep(MinecraftServer server, List<ServerPlayer> players, int cx, int top, int cz) {
-        if (swordSpot != null) {
-            if (clock % 5 == 0) {
-                Rift.cmd(server, in(server) + "particle minecraft:enchanted_hit " + fmt(swordSpot[0]) + " " + (top + 1.2) + " "
-                        + fmt(swordSpot[2]) + " 0.3 0.6 0.3 0 6 force");
+            if (--timer <= 0) {
+                state = RECOVER;
+                timer = phase == 1 ? 30 : 22;
             }
+        } else if (state == RECOVER) {
+            if (--timer <= 0) {
+                state = CHASE;
+            }
+        } else if (state == AIM) {
+            if (clock % 2 == 0) {
+                for (int k = 1; k <= 14; k++) {
+                    double f = lineLength * k / 14;
+                    Rift.cmd(server, in + "particle minecraft:end_rod " + fmt(bx + lineX * f) + " " + fmt(by + 1.0) + " " + fmt(bz + lineZ * f) + " 0 0 0 0 1 force");
+                }
+            }
+            if (--timer <= 0) {
+                state = DASH;
+                timer = 6;
+                struck.clear();
+                pose(server, false);
+                swing(true);
+                Rift.sound(server, "minecraft:item.trident.riptide_1", 1.2);
+            }
+        } else if (state == DASH) {
+            move(level, cx, top, cz, lineX * lineLength / 6, lineZ * lineLength / 6);
+            Rift.cmd(server, in + "particle minecraft:sweep_attack " + fmt(bx) + " " + fmt(by + 1.4) + " " + fmt(bz) + " 0.6 0.3 0.6 0 4 force");
             for (ServerPlayer player : players) {
-                if (Math.hypot(player.getX() - swordSpot[0], player.getZ() - swordSpot[2]) < 1.7) {
-                    Rift.cmd(server, "kill @e[tag=riss_sword]");
-                    Rift.cmd(server, "give " + player.getScoreboardName() + " " + BLADE);
-                    swordSpot = null;
-                    swordLost = 0;
-                    Rift.broadcast(server, "§b✦ " + player.getScoreboardName() + " hält die Klinge des Meisters. §7Nur damit kann man ihn jetzt verletzen. "
-                            + "Mit Q könnt ihr sie euch zuwerfen.");
-                    Rift.sound(server, "minecraft:item.armor.equip_netherite", 1.2);
-                    return;
+                if (distance(player) < 2.2 && struck.add(player.getScoreboardName())) {
+                    hurt(server, player, 9, true);
                 }
             }
-            return;
-        }
-        boolean held = false;
-        for (ServerPlayer player : players) {
-            held |= holdsBlade(player) || player.getOffhandItem().is(ModItems.MASTER_BLADE);
-        }
-        if (held) {
-            swordLost = 0;
-        } else if (++swordLost > 400) {
-            // 20 Sekunden lang hält sie niemand in der Hand: Sie steckt wieder in der Insel
-            removeBlades(server);
-            spawnSword(server, cx, top, cz);
-            swordLost = 0;
+            if (--timer <= 0) {
+                swing(false);
+                state = RECOVER;
+                timer = 30;
+            }
+        } else if (state == THROW) {
+            // das dunkle Katana fliegt im Bogen hinaus und kehrt zurück
+            double p = 1 - timer / 50.0;
+            double out = 12 * Math.sin(Math.PI * p);
+            double side = 3.5 * Math.sin(2 * Math.PI * p);
+            double fx = bx + lineX * out - lineZ * side;
+            double fz = bz + lineZ * out + lineX * side;
+            Rift.cmd(server, in + "tp @e[tag=riss_fly,limit=1] " + fmt(fx) + " " + fmt(by + 1.3) + " " + fmt(fz) + " " + fmt((clock * 50) % 360) + " 0");
+            for (ServerPlayer player : players) {
+                if (Math.hypot(player.getX() - fx, player.getZ() - fz) < 1.5 && struck.add(player.getScoreboardName())) {
+                    hurt(server, player, 7, true);
+                }
+            }
+            if (timer == 25) {
+                struck.clear(); // auf dem Rückweg kann es noch einmal treffen
+            }
+            if (--timer <= 0) {
+                Rift.cmd(server, "kill @e[tag=riss_fly]");
+                equip(server, true);
+                state = RECOVER;
+                timer = 15;
+            }
+        } else if (state == WHIRL) {
+            yaw = (yaw + 42) % 360;
+            move(level, cx, top, cz, dx / dist * 0.27, dz / dist * 0.27);
+            if (clock % 2 == 0) {
+                double a = clock * 0.9;
+                Rift.cmd(server, in + "particle minecraft:sweep_attack " + fmt(bx + 2 * Math.cos(a)) + " " + fmt(by + 1.4) + " " + fmt(bz + 2 * Math.sin(a)) + " 0 0 0 0 1 force");
+            }
+            if (timer % 8 == 0) {
+                swing(timer % 16 == 0);
+                Rift.cmd(server, in + "playsound minecraft:entity.player.attack.sweep master @a " + fmt(bx) + " " + fmt(by) + " " + fmt(bz) + " 1 1.4");
+                for (ServerPlayer player : players) {
+                    double d = distance(player);
+                    if (d < 3.0 && d > 0.05) {
+                        hurt(server, player, 5, true);
+                        fling(player, (player.getX() - bx) / d * 0.8, 0.35, (player.getZ() - bz) / d * 0.8);
+                    }
+                }
+            }
+            if (--timer <= 0) {
+                state = RECOVER;
+                timer = 40; // ihm ist schwindlig – gute Gelegenheit
+            }
+        } else if (state == CUTS) {
+            if (clock % 3 == 0) {
+                for (double[] c : cuts) {
+                    for (int k = -6; k <= 6; k++) {
+                        Rift.cmd(server, in + "particle minecraft:end_rod " + fmt(c[0] + c[2] * k * 2.6) + " " + fmt(by + 0.6) + " " + fmt(c[1] + c[3] * k * 2.6) + " 0 0 0 0 1 force");
+                    }
+                }
+            }
+            if (--timer <= 0) {
+                swing(true);
+                swing(false);
+                pose(server, false);
+                Rift.sound(server, "minecraft:entity.player.attack.crit", 0.6);
+                for (ServerPlayer player : players) {
+                    for (double[] c : cuts) {
+                        double px = player.getX() - c[0];
+                        double pz = player.getZ() - c[1];
+                        if (Math.abs(px * c[3] - pz * c[2]) < 0.9 && Math.abs(px * c[2] + pz * c[3]) < 17) {
+                            hurt(server, player, 8, false);
+                            break;
+                        }
+                    }
+                }
+                cuts.clear();
+                state = RECOVER;
+                timer = 35;
+            }
         }
     }
 
-    private static void takeBladeBack(MinecraftServer server, int cx, int top, int cz, String text) {
-        removeBlades(server);
-        spawnSword(server, cx, top, cz);
-        say(server, text);
+    private static void startSpecial(MinecraftServer server, ServerLevel level, List<ServerPlayer> players, ServerPlayer t,
+                                     int cx, int top, int cz, int phase) {
+        double dx = t.getX() - bx;
+        double dz = t.getZ() - bz;
+        double dist = Math.max(0.01, Math.hypot(dx, dz));
+        lineX = dx / dist;
+        lineZ = dz / dist;
+        face(t.getX(), t.getZ());
+        int pick = phase == 1 ? 0 : RANDOM.nextInt(phase == 2 ? 4 : 5);
+        String in = in(server);
+        if (pick == 0) {                 // Sturmschnitt
+            state = AIM;
+            timer = phase == 1 ? 24 : 18;
+            lineLength = Math.min(16, dist + 5);
+            pose(server, true);
+            Rift.sound(server, "minecraft:item.trident.throw", 0.6);
+        } else if (pick == 1) {          // Klingenwurf
+            state = THROW;
+            timer = 50;
+            struck.clear();
+            swing(false);
+            equip(server, false);
+            Rift.cmd(server, "kill @e[tag=riss_fly]");
+            Rift.cmd(server, in + "summon minecraft:item_display " + fmt(bx) + " " + fmt(by + 1.3) + " " + fmt(bz)
+                    + " {Tags:[\"riss_fly\"],teleport_duration:1,item:{id:\"" + NS + (phase == 3 ? ":katana_soul" : ":katana_dark") + "\",count:1},"
+                    + "transformation:{left_rotation:[0.7f,0f,0f,0.7f],right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[2f,2f,2f]},"
+                    + "brightness:{sky:15,block:15}}");
+            Rift.sound(server, "minecraft:item.trident.throw", 1.0);
+            Rift.cmd(server, "title @a actionbar {text:\"Klingenwurf – jetzt hat er nur eine Klinge: beide können ihn treffen!\",color:\"yellow\"}");
+        } else if (pick == 2) {          // Schattenschritt: hinter das Ziel
+            Rift.cmd(server, in + "particle minecraft:large_smoke " + fmt(bx) + " " + fmt(by + 1) + " " + fmt(bz) + " 0.4 0.8 0.4 0.02 30 force");
+            double look = Math.toRadians(t.getYRot());
+            bx = t.getX() + Math.sin(look) * 2.2;
+            bz = t.getZ() - Math.cos(look) * 2.2;
+            move(level, cx, top, cz, 0, 0);
+            face(t.getX(), t.getZ());
+            Rift.cmd(server, in + "particle minecraft:large_smoke " + fmt(bx) + " " + fmt(by + 1) + " " + fmt(bz) + " 0.4 0.8 0.4 0.02 30 force");
+            Rift.cmd(server, in + "playsound minecraft:entity.enderman.teleport master @a " + fmt(bx) + " " + fmt(by) + " " + fmt(bz) + " 1 0.7");
+            state = SLASH;
+            timer = 26;
+        } else if (pick == 3) {          // Wirbel
+            state = WHIRL;
+            timer = 64;
+            Rift.sound(server, "minecraft:entity.breeze.wind_burst", 0.8);
+        } else {                         // Tausend Schnitte
+            state = CUTS;
+            timer = 34;
+            cuts.clear();
+            for (int i = 0; i < 6; i++) {
+                ServerPlayer around = players.get(RANDOM.nextInt(players.size()));
+                double a = RANDOM.nextDouble() * Math.PI;
+                cuts.add(new double[] {around.getX() + RANDOM.nextDouble() * 10 - 5, around.getZ() + RANDOM.nextDouble() * 10 - 5, Math.cos(a), Math.sin(a)});
+            }
+            pose(server, true);
+            Rift.sound(server, "minecraft:block.bell.resonate", 1.6);
+            Rift.cmd(server, "title @a actionbar {text:\"Tausend Schnitte – weg von den Lichtlinien!\",color:\"gold\"}");
+        }
     }
 
-    private static void disarmTick(MinecraftServer server, List<ServerPlayer> players, int cx, int top, int cz) {
-        if (!disarmAnnounced) {
-            disarmAnnounced = true;
-            stage = IDLE;
-            Rift.cmd(server, "kill @e[tag=riss_blade]");
-            glow(server, false);
-            equip(server);
-            spawnSword(server, cx, top, cz);
-            Rift.title(server, "ENTWAFFNET", "aqua", "Holt euch sein Schwert – nur damit ist er verwundbar");
-            say(server, "Mein Schwert! Fasst es nicht an!");
-            Rift.cmd(server, "bossbar set challenge:riss color blue");
-        }
-        swordUpkeep(server, players, cx, top, cz);
-        // er jagt den Träger des Schwerts, sonst den Nächsten
-        ServerPlayer target = null;
-        boolean carrier = false;
-        for (ServerPlayer player : players) {
-            boolean has = holdsBlade(player) || player.getOffhandItem().is(ModItems.MASTER_BLADE);
-            if (target == null || (has && !carrier) || (has == carrier && distance(player) < distance(target))) {
-                target = player;
-                carrier = has;
+    /** Phase 3: Trugbilder – Kopien, die mitkämpfen. Ein Treffer lässt sie zerplatzen. */
+    private static void clones(MinecraftServer server, ServerLevel level, List<ServerPlayer> players, int cx, int top, int cz) {
+        String in = in(server);
+        if (--cloneTimer <= 0) {
+            cloneTimer = 320;
+            while (clones.size() < 2) {
+                int id = cloneId++ % 1000;
+                double a = RANDOM.nextDouble() * Math.PI * 2;
+                double x = bx + 4 * Math.cos(a);
+                double z = bz + 4 * Math.sin(a);
+                clones.add(new double[] {id, x, z, 30});
+                Rift.cmd(server, in + "summon minecraft:mannequin " + fmt(x) + " " + fmt(by) + " " + fmt(z)
+                        + " {Tags:[\"riss_clone\",\"riss_add\",\"riss_c" + id + "\"]," + PROFILE + ",CustomName:\"" + NAME + "\",CustomNameVisible:1b}");
+                String clone = "@e[tag=riss_c" + id + ",limit=1]";
+                Rift.cmd(server, "attribute " + clone + " minecraft:scale base set 1.5");
+                Rift.cmd(server, "attribute " + clone + " minecraft:max_health base set 1");
+                Rift.cmd(server, "item replace entity " + clone + " weapon.mainhand with " + NS + ":katana_flame");
+                Rift.cmd(server, "item replace entity " + clone + " weapon.offhand with " + NS + ":katana_soul");
+                Rift.cmd(server, in + "particle minecraft:large_smoke " + fmt(x) + " " + fmt(by + 1) + " " + fmt(z) + " 0.4 0.8 0.4 0.02 20 force");
             }
+            Rift.sound(server, "minecraft:entity.illusioner.mirror_move", 1.0);
         }
-        String name = target.getScoreboardName();
-        double tx = target.getX() - bx;
-        double tz = target.getZ() - bz;
-        double dist = Math.hypot(tx, tz);
-        if (catchCooldown > 0) {
-            catchCooldown--;
-        } else if (dist > 1.9) {
-            bx += tx / dist * 0.25;
-            bz += tz / dist * 0.25;
-            // er bleibt auf dem Platz in der Mitte
-            double fromCenter = Math.hypot(bx - (cx + 0.5), bz - (cz + 0.5));
-            if (fromCenter > 9.3) {
-                bx = cx + 0.5 + (bx - (cx + 0.5)) / fromCenter * 9.3;
-                bz = cz + 0.5 + (bz - (cz + 0.5)) / fromCenter * 9.3;
+        for (Iterator<double[]> it = clones.iterator(); it.hasNext();) {
+            double[] c = it.next();
+            String clone = "@e[tag=riss_c" + (int) c[0] + ",limit=1]";
+            if (clock % 10 == 0) {
+                Rift.cmd(server, "execute store result score #clone_n sb if entity " + clone);
+                if (Rift.score(server, "#clone_n") == 0) {
+                    Rift.cmd(server, in + "particle minecraft:poof " + fmt(c[1]) + " " + fmt(by + 1) + " " + fmt(c[2]) + " 0.3 0.6 0.3 0.05 20 force");
+                    it.remove();
+                    continue;
+                }
             }
-        } else {
-            Rift.cmd(server, "damage " + name + " 8 minecraft:mob_attack");
-            fling(target, tx / Math.max(dist, 0.1) * 0.9, 0.4, tz / Math.max(dist, 0.1) * 0.9);
-            catchCooldown = 50;
-            if (carrier) {
-                takeBladeBack(server, cx, top, cz, "Das gehört mir.");
+            ServerPlayer t = nearest(players, c[1], c[2]);
+            double dx = t.getX() - c[1];
+            double dz = t.getZ() - c[2];
+            double dist = Math.max(0.01, Math.hypot(dx, dz));
+            if (dist > 2.2) {
+                c[1] += dx / dist * 0.19;
+                c[2] += dz / dist * 0.19;
+            } else if (c[3] <= 0) {
+                c[3] = 30;
+                hurt(server, t, 3, true);
             }
+            c[3]--;
+            Rift.cmd(server, in + "tp " + clone + " " + fmt(c[1]) + " " + fmt(ground(level, top, c[1], c[2])) + " " + fmt(c[2])
+                    + " " + fmt(-Math.toDegrees(Math.atan2(dx, dz))) + " 0");
         }
-        // wer mit dem Schwert vom Platz flieht, verliert es
-        if (carrier && Math.hypot(target.getX() - (cx + 0.5), target.getZ() - (cz + 0.5)) > 12.5) {
-            if (++outside > 100) {
-                outside = 0;
-                takeBladeBack(server, cx, top, cz, "Weglaufen? Mit MEINEM Schwert?");
-            } else if (outside % 20 == 1) {
-                hint(server, target, "Bleib auf dem Platz in der Mitte, sonst kehrt das Schwert zu ihm zurück!");
-            }
-        } else {
-            outside = 0;
-        }
-        pose(server, top, name, 0);
     }
 
-    // ------------------------------------------------------------------ Finale
-    private static void finaleTick(MinecraftServer server, List<ServerPlayer> players, int cx, int top, int cz) {
+    // ------------------------------------------------------------------ Finale: Letzter Schnitt
+    private static void finaleTick(MinecraftServer server, List<ServerPlayer> players) {
+        String in = in(server);
         if (!finaleAnnounced) {
             finaleAnnounced = true;
-            stage = IDLE;
-            timer = 60;
-            openWindow = 0;
-            bx = cx + 0.5;
-            bz = cz + 0.5;
-            Rift.title(server, "LETZTES GEFECHT", "gold", "Einer blockt seinen Hieb, der andere schlägt mit dem Schwert zu");
-            say(server, "Ich brauche kein Schwert für euch.");
+            state = FINAL;
+            timer = 110;
+            lastHit[1] = -1000;
+            lastHit[2] = -1000;
+            Rift.cmd(server, "kill @e[tag=riss_clone]");
+            Rift.cmd(server, "kill @e[tag=riss_fly]");
+            clones.clear();
+            equip(server, true);
+            pose(server, true);
+            Rift.cmd(server, "team leave @e[tag=riss_boss]");
             Rift.cmd(server, "bossbar set challenge:riss color yellow");
-            Rift.sound(server, "minecraft:block.bell.resonate", 1.0);
+            Rift.cmd(server, "bossbar set challenge:riss name \"" + NAME + " – trefft ihn BEIDE, bevor er zuschlägt\"");
+            Rift.title(server, "LETZTER SCHNITT", "gold", "Trefft ihn beide, solange er ausholt");
+            say(server, "Ein letzter Schnitt. Für uns alle.");
+            Rift.sound(server, "minecraft:block.bell.resonate", 0.8);
         }
-        swordUpkeep(server, players, cx, top, cz);
-        // der Hieb gilt dem, der das Schwert NICHT hält
-        ServerPlayer blocker = players.get(0);
-        for (ServerPlayer player : players) {
-            if (!holdsBlade(player)) {
-                blocker = player;
-                break;
-            }
-        }
-        String name = blocker.getScoreboardName();
-        if (openWindow > 0) {
-            if (--openWindow == 0) {
-                glow(server, false);
-            } else if (clock % 5 == 0) {
-                Rift.cmd(server, in(server) + "particle minecraft:crit " + fmt(bx) + " " + (top + 2.5) + " " + fmt(bz) + " 0.6 1 0.6 0.2 12 force");
-            }
-        }
-        if (stage == IDLE) {
-            pose(server, top, name, 0);
-            if (openWindow == 0 && --timer <= 0) {
-                stage = TELEGRAPH;
-                timer = 30;
-                attack = HIEB;
-                titleTo(server, name, "HIEB", "red", "Schild hoch!");
-                Rift.sound(server, ATTACK_SOUND[HIEB], 1.6);
-            }
-        } else {
-            pose(server, top + 1.5, name, 0);
+        if (timer > 0) {
+            // er holt aus
             if (clock % 2 == 0) {
-                Rift.cmd(server, in(server) + "particle minecraft:crit " + fmt(bx) + " " + (top + 6) + " " + fmt(bz) + " 0.4 0.4 0.4 0.1 8 force");
+                Rift.cmd(server, in + "particle minecraft:flame " + fmt(bx) + " " + fmt(by + 2.2) + " " + fmt(bz) + " 0.3 1 0.3 0.05 6 force");
             }
-            if (--timer <= 0) {
-                stage = IDLE;
-                timer = 70;
-                if (blocker.isBlocking() && distance(blocker) < 12) {
-                    openWindow = 100;
-                    glow(server, true);
-                    Rift.sound(server, "minecraft:item.shield.block", 1.0);
-                    Rift.title(server, "JETZT!", "green", "5 Sekunden: Schlag mit seinem Schwert zu");
-                } else {
-                    Rift.cmd(server, "damage " + name + " 7 minecraft:mob_attack");
-                    say(server, TAUNTS[RANDOM.nextInt(TAUNTS.length)]);
+            if (--timer == 0) {
+                swing(true);
+                swing(false);
+                pose(server, false);
+                Rift.cmd(server, in + "particle minecraft:explosion_emitter " + fmt(bx) + " " + fmt(by + 1) + " " + fmt(bz) + " 2 0.5 2 0 4 force");
+                Rift.sound(server, "minecraft:entity.generic.explode", 0.7);
+                for (ServerPlayer player : players) {
+                    if (distance(player) < 30) {
+                        hurt(server, player, 12, false);
+                    }
                 }
+                say(server, TAUNTS[RANDOM.nextInt(TAUNTS.length)]);
+                timer = -70; // kurze Pause, dann holt er neu aus
             }
+        } else if (++timer == 0) {
+            timer = 110;
+            lastHit[1] = -1000;
+            lastHit[2] = -1000;
+            pose(server, true);
+            Rift.title(server, "LETZTER SCHNITT", "gold", "Trefft ihn beide, solange er ausholt");
         }
     }
 
@@ -748,29 +722,28 @@ final class RiftBoss {
     private static void win(MinecraftServer server) {
         finishNow = false;
         killing = true;
-        Rift.cmd(server, "kill @e[tag=riss_boss]");
-        Rift.cmd(server, "kill @e[tag=riss_add]");
-        Rift.cmd(server, "kill @e[tag=riss_sword]");
+        for (String tag : new String[] {"riss_boss", "riss_add", "riss_clone", "riss_fly"}) {
+            Rift.cmd(server, "kill @e[tag=" + tag + "]");
+        }
         killing = false;
+        body = null;
         Rift.cmd(server, "bossbar remove challenge:riss");
         barShown = false;
         Rift.set(server, "#rift_phase", 4);
-        say(server, "Gut gekämpft. Behaltet die Klinge.");
+        say(server, "Endlich … würdige Gegner. Nehmt meine Klingen.");
+        Rift.cmd(server, "give @a[scores={sb.role=1}] " + NS + ":katana_light");
+        Rift.cmd(server, "give @a[scores={sb.role=2}] " + NS + ":katana_dark");
         Rift.broadcast(server, "§d✦ " + NAME + " ist besiegt. §7In 30 Sekunden bringt euch der Riss zurück in die Oberwelt.");
         Rift.scheduleReturn(600);
-        Rift.cmd(server, "function " + ChallengeMod.NS + ":win/win");
+        Rift.cmd(server, "function " + NS + ":win/win");
         reset();
     }
 
     // ------------------------------------------------------------------ Schaden am Boss
-    private static boolean isBoss(LivingEntity entity) {
-        return Math.abs(entity.getMaxHealth() - MAX_HP) < 0.5F || NAME.equals(entity.getName().getString());
-    }
-
     /** Fabric-Ereignis: false = der Treffer zählt nicht. */
     static boolean allowDamage(LivingEntity entity, DamageSource source, float amount) {
         try {
-            if (killing || !isBoss(entity)) {
+            if (killing || !entity.entityTags().contains("riss_boss")) {
                 return true;
             }
             MinecraftServer server = entity.level().getServer();
@@ -780,55 +753,34 @@ final class RiftBoss {
             if (!(source.getEntity() instanceof ServerPlayer player)) {
                 return false; // nur Spieler können ihm etwas anhaben
             }
-            String name = player.getScoreboardName();
+            if (source.getDirectEntity() != player) {
+                Rift.cmd(server, "execute at " + BOSS + " run playsound minecraft:item.shield.block master @a ~ ~ ~ 1 1.4");
+                hint(server, player, "Er wehrt Pfeile und Geschosse mit den Klingen ab.");
+                return false;
+            }
+            int role = Rift.role(server, player);
             if (finale) {
-                if (openWindow > 0 && holdsBlade(player)) {
-                    finishNow = true;
-                } else {
-                    hint(server, player, openWindow > 0 ? "Nur seine eigene Klinge kann ihn besiegen."
-                            : "Erst muss einer seinen Hieb mit dem Schild blocken.");
+                if (timer > 0) {
+                    lastHit[role == 2 ? 2 : 1] = clock;
+                    boolean ok1 = !has1 || clock - lastHit[1] <= 110;
+                    boolean ok2 = !has2 || clock - lastHit[2] <= 110;
+                    if (ok1 && ok2) {
+                        finishNow = true;
+                    } else {
+                        hint(server, player, "Getroffen! Jetzt muss dein Partner auch treffen, bevor er zuschlägt.");
+                    }
                 }
                 return false;
             }
-            if (disarmed) {
-                if (!holdsBlade(player)) {
-                    hint(server, player, "Nur sein eigenes Schwert kann ihn jetzt verletzen.");
-                    return false;
-                }
-                Long last = bladeHit.get(name);
-                if (last != null && clock - last < 10) {
-                    return false;
-                }
-                bladeHit.put(name, clock);
-                float limit = entity.getMaxHealth() * 0.1F;
-                float health = entity.getHealth() - 12.0F;
-                if (health <= limit) {
-                    health = limit;
-                    finale = true;
-                }
-                entity.setHealth(health);
-                Rift.sound(server, "minecraft:entity.player.attack.crit", 1.0);
+            if (!canHit(role)) {
+                Rift.cmd(server, "execute at " + BOSS + " run playsound minecraft:block.anvil.place master @a ~ ~ ~ 0.5 1.8");
+                hint(server, player, "Er pariert deine Schläge. Gerade kann nur dein Partner ihn treffen.");
                 return false;
             }
-            if (stage == BOW) {
-                if (!angry) {
-                    angry = true;
-                    say(server, "Vor der Verbeugung? Ehrlos. Dann eben ohne Gnade.");
-                }
-                return false;
-            }
-            if (!name.equals(duelist)) {
-                hint(server, player, "Das ist nicht dein Duell. Halte die Schattenklingen fern!");
-                return false;
-            }
-            if (stage != STAGGER) {
-                hint(server, player, "Er pariert. Antworte richtig auf seinen Schlag, dann ist er offen.");
-                return false;
-            }
-            float limit = entity.getMaxHealth() * 0.33F;
+            float limit = entity.getMaxHealth() * 0.1F;
             if (entity.getHealth() - amount <= limit) {
                 entity.setHealth(limit);
-                disarmed = true;
+                finale = true;
                 return false;
             }
             return true;

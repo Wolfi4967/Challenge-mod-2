@@ -655,6 +655,6 @@ final class Rift {
         set(server, "#rift_phase", 2);
         title(server, "DER RISS", "light_purple", "Geht zur Blüte in der Mitte");
         sound(server, "minecraft:block.end_portal.spawn", 0.7);
-        broadcast(server, "§d☯ Ihr steht zum ersten Mal nebeneinander. §7Geht zur großen Blüte in der Mitte – dort wartet der Klingenmeister. Nehmt beide einen Schild in die Hand.");
+        broadcast(server, "§d☯ Ihr steht zum ersten Mal nebeneinander. §7Geht zur großen Blüte in der Mitte – dort wartet der Ronin. Ein Schild hilft gegen seine Hiebe.");
     }
 }

@@ -37,6 +37,7 @@ public class ChallengeMod implements ModInitializer {
         ModBlocks.initialize();
         // Seelenwelten: Tore, Siegel, gemeinsame Seelentruhe, Seelenstein und der Bosskampf im Riss
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(RiftBoss::allowDamage);
+        ServerEntityEvents.ENTITY_LOAD.register(RiftBoss::onEntityLoad);
         ServerTickEvents.END_SERVER_TICK.register(SoulWorlds::tick);
         UseItemCallback.EVENT.register(SoulWorlds::useItem);
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));

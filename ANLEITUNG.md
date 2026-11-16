@@ -72,7 +72,7 @@ Du musst dafür nichts installieren. Es sind nur **12 Dateien** – GitHub schaf
 5. **„▶ Challenge starten“** – 3, 2, 1, los!
 6. Freunde: Welt **im LAN öffnen** (oder Lunar „Hosted World“). Freunde brauchen dieselbe Mod-Datei wie du.
 
-### Ziel „Seelenwelten: Der Klingenmeister“ (ab Version 1.2.0)
+### Ziel „Seelenwelten: Der Ronin“ (ab Version 1.2.0)
 
 Kein Zusatz-Datenpaket mehr nötig – `Seelenwelten-Dimensionen.zip` könnt ihr weglassen.
 
@@ -100,28 +100,20 @@ liegt 12.500 Blöcke weiter. Ihr müsst also keine neue Welt mehr anlegen.
 6. Ein Siegel setzt ihr mit **Rechtsklick in der Nähe eures Tors** ein.
 7. Sitzen alle acht Siegel, öffnen sich beide Tore. Stellt euch **gleichzeitig** in euer Tor und bleibt 3 Sekunden stehen.
 8. Ihr landet auf der Insel **„Der Riss“** (End-Himmel, kein Drache). Geht zur Blüte in der Mitte.
-9. **Der Klingenmeister** – ein gepanzerter Schwertkämpfer, doppelt so groß wie ihr. **Nehmt beide einen Schild mit.**
-   - **Das Duell:** Er fordert immer einen von euch heraus (leuchtender Kreis). Nur der Duellant kann ihn treffen –
-     und nur, nachdem er richtig auf einen Schlag geantwortet hat:
-
-     | Ansage | Antwort |
-     |---|---|
-     | **HIEB** (er springt hoch) | mit dem Schild blocken |
-     | **FEGER** (Ring am Boden) | springen |
-     | **STICH** (Lichtlinie auf dich) | zur Seite gehen |
-     | **WIRBEL** (er dreht sich) | Abstand nehmen |
-
-     Nach einer richtigen Antwort ist er kurz aus dem Gleichgewicht (er leuchtet) – dann zuschlagen.
-   - **Der andere Spieler** bleibt außerhalb des Kreises und schlägt die **Schattenklingen** weg (schwebende Schwerter,
-     die auf den Duellanten zufliegen). Nach drei Schlagwechseln wechselt der Gegner.
-   - **Verbeugung:** Vor jedem Duell wartet er kurz. Wer schleicht, verbeugt sich und bekommt 30 Sekunden Schutz.
-     Wer ihn in dem Moment schlägt, macht ihn wütend (schnellere Schläge).
-   - **Zwei Klingen** (unter zwei Dritteln Leben): schnellere Schläge, immer zwei hintereinander, mehr Schattenklingen.
-   - **Entwaffnet** (unter einem Drittel): Sein Schwert steckt in der Insel. Hebt es auf – nur mit der **Klinge des
-     Meisters** in der Hand kann man ihn verletzen. Er jagt den Träger und holt sie sich zurück, wenn er ihn erwischt.
-     Mit Q könnt ihr sie euch zuwerfen. Wer damit vom Platz in der Mitte flieht, verliert sie.
-   - **Finale** (letzte 10 %): Einer blockt seinen HIEB mit dem Schild, dann hat der andere 5 Sekunden für den Schlag
-     mit der Klinge.
+9. **Der Ronin** – ein Samurai mit eigener Rüstung und zwei eigenen Katanas. Ein Schild hält seine Hiebe auf.
+   - **Zu zweit:** Er pariert immer die Schläge von einem von euch, nur der andere trifft. Das wechselt alle paar Sekunden.
+     **Leuchtet er blau**, trifft der Oberwelt-Spieler. **Leuchtet er rot**, trifft der Nether-Spieler.
+     Über der Leiste unten steht außerdem, ob du gerade triffst. Pfeile wehrt er immer ab.
+   - **Phase 1 – Zwei Klingen:** Doppelhiebe im Nahkampf. **Sturmschnitt:** Er kniet, eine Lichtlinie zeigt den Weg,
+     dann rast er hindurch – von der Linie weg oder blocken.
+   - **Phase 2 – Der Sturm** (unter zwei Dritteln): **Klingenwurf** (ein Katana fliegt im Bogen und kehrt zurück –
+     solange können ihn beide treffen), **Schattenschritt** (er taucht hinter euch auf), **Wirbel** (er dreht sich
+     und verfolgt euch – danach ist ihm kurz schwindlig).
+   - **Phase 3 – Der Dämon** (unter einem Drittel): brennende Klingen, **Trugbilder** (Kopien, die ein Treffer
+     zerplatzen lässt), **Tausend Schnitte** (Lichtlinien am Boden – weg davon, bevor sie schneiden).
+   - **Letzter Schnitt** (letzte 10 %): Er holt gut 5 Sekunden aus. Trefft ihn in der Zeit **beide**, sonst trifft er euch
+     und holt neu aus.
+   - Zur Belohnung bekommt ihr seine Katanas.
 
 **Zum Ausprobieren** (während die Challenge mit diesem Ziel läuft):
 
